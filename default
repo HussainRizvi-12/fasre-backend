@@ -1,0 +1,37 @@
+server {
+    # Proxy requests to the default PHP-FPM port on Azure App Service
+    listen 8080;
+    listen [::]:8080;
+    server_name default;
+    root /home/site/wwwroot/public;
+    index index.php index.html index.htm;
+
+    # Charset
+    charset utf-8;
+
+    # Gzip compression
+    gzip on;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_read_timeout 300;
+    }
+
+    location ~ /\.(?!well-known).* {
+        deny all;
+    }
+}
