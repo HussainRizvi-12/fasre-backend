@@ -22,9 +22,9 @@ class FacultyAssignmentResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-user-plus';
 
-    protected static ?string $navigationGroup = 'People';
+    protected static ?string $navigationGroup = null;
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
     {

@@ -23,7 +23,7 @@ class AuditQuestionResource extends Resource
 
     protected static ?string $navigationLabel = 'Audit Questions';
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
+    protected static ?string $navigationIcon = 'heroicon-o-shield-check';
 
     protected static ?string $navigationGroup = 'Evaluation Config';
 
