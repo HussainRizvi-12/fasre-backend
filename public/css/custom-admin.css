@@ -17,6 +17,20 @@ body {
   color: var(--ink) !important;
 }
 
+/* Full-Screen Campus Backdrop on Login / Auth */
+.fi-simple-layout {
+  background: linear-gradient(135deg, rgba(14, 21, 63, 0.90) 0%, rgba(22, 33, 94, 0.85) 100%), url('/images/campus.jpg') center/cover no-repeat fixed !important;
+  min-height: 100vh !important;
+}
+
+.fi-simple-main-ctn {
+  background-color: #ffffff !important;
+  border-radius: 1.25rem !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  padding: 2rem !important;
+}
+
 /* Sidebar Deep Navy Theme */
 .fi-sidebar {
   background: linear-gradient(180deg, #0e153f 0%, #16215e 100%) !important;
