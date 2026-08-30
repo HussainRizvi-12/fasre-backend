@@ -1,4 +1,4 @@
-<div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#001d5c] via-[#00236f] to-[#1e3a8a] text-white p-6 sm:p-8 shadow-xl shadow-blue-950/20 border border-blue-800/40">
+<div style="background: linear-gradient(135deg, #001d5c 0%, #00236f 50%, #1e3a8a 100%) !important; color: #ffffff !important; border: 1px solid rgba(59, 130, 246, 0.4) !important;" class="relative overflow-hidden rounded-2xl p-6 sm:p-8 shadow-xl shadow-blue-950/30">
     {{-- Ambient Decorative Glow Elements --}}
     <div class="absolute -top-24 -right-24 w-72 h-72 bg-gradient-to-br from-amber-400/20 to-blue-500/0 rounded-full blur-3xl pointer-events-none"></div>
     <div class="absolute -bottom-20 -left-20 w-60 h-60 bg-blue-400/10 rounded-full blur-2xl pointer-events-none"></div>
@@ -11,11 +11,11 @@
                 <span>Fall 2026 Academic Evaluation Cycle Active</span>
             </div>
 
-            <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white" style="font-family: var(--font-display);">
+            <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white" style="font-family: var(--font-display); color: #ffffff !important;">
                 Welcome back, {{ auth()->user()->name ?? 'Administrator' }} 👋
             </h2>
 
-            <p class="text-sm text-blue-100/80 max-w-xl">
+            <p class="text-sm text-blue-100/90 max-w-xl" style="color: rgba(239, 246, 255, 0.9) !important;">
                 Higher Education Institutional Quality Assurance Portal. Monitor student evaluation metrics, assign peer faculty audits, and inspect aggregated course feedback.
             </p>
         </div>
@@ -23,8 +23,9 @@
         {{-- Command Center Quick Actions --}}
         <div class="flex flex-wrap items-center gap-3">
             <a
-                href="{{ \App\Filament\Resources\ReviewWindowResource::getUrl('create') }}"
+                href="{{ url('/admin/review-windows/create') }}"
                 class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-900 bg-gradient-to-r from-[#f5c518] to-amber-400 hover:from-amber-400 hover:to-amber-500 shadow-md shadow-amber-950/20 transition-all transform hover:-translate-y-0.5"
+                style="color: #0f172a !important;"
             >
                 <svg class="w-4 h-4 text-slate-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
@@ -33,8 +34,9 @@
             </a>
 
             <a
-                href="{{ \App\Filament\Resources\AuditAssignmentResource::getUrl('create') }}"
+                href="{{ url('/admin/audit-assignments/create') }}"
                 class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/20 shadow-sm transition-all transform hover:-translate-y-0.5"
+                style="color: #ffffff !important;"
             >
                 <svg class="w-4 h-4 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
@@ -43,8 +45,9 @@
             </a>
 
             <a
-                href="{{ \App\Filament\Pages\ReviewResults::getUrl() }}"
+                href="{{ url('/admin/review-results') }}"
                 class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 shadow-sm transition-all transform hover:-translate-y-0.5"
+                style="color: #ffffff !important;"
             >
                 <svg class="w-4 h-4 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
