@@ -20,9 +20,9 @@ class AuditAssignmentResource extends Resource
 {
     protected static ?string $model = AuditAssignment::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static ?string $navigationIcon = 'heroicon-o-document-magnifying-glass';
 
-    protected static ?string $navigationGroup = 'Reviews & Audits';
+    protected static ?string $navigationGroup = 'Review Cycles & Audits';
 
     protected static ?int $navigationSort = 2;
 

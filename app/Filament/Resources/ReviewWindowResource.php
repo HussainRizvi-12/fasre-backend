@@ -19,7 +19,7 @@ class ReviewWindowResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
 
-    protected static ?string $navigationGroup = 'Evaluation Config';
+    protected static ?string $navigationGroup = 'Review Cycles & Audits';
 
     protected static ?int $navigationSort = 3;
 

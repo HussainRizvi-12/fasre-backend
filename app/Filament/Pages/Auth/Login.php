@@ -3,19 +3,18 @@
 namespace App\Filament\Pages\Auth;
 
 use Filament\Pages\Auth\Login as BaseLogin;
-use Illuminate\Contracts\Support\Htmlable;
 
 class Login extends BaseLogin
 {
-    protected static string $view = 'filament.pages.auth.login';
+    protected static string $view = 'filament.pages.auth.custom-login';
 
-    public function getHeading(): string|Htmlable
+    public function getHeading(): string
     {
-        return '';
+        return 'Institutional Sign In';
     }
 
-    public function getSubHeading(): string|Htmlable|null
+    public function getSubheading(): ?string
     {
-        return null;
+        return 'Enter your academic credentials to access the FASRE QA portal.';
     }
 }

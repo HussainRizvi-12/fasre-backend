@@ -26,7 +26,7 @@ class AuditSubmissionResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-document-check';
 
-    protected static ?string $navigationGroup = 'Reviews & Audits';
+    protected static ?string $navigationGroup = 'Review Cycles & Audits';
 
     protected static ?int $navigationSort = 3;
 

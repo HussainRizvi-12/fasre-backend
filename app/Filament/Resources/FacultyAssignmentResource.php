@@ -20,11 +20,11 @@ class FacultyAssignmentResource extends Resource
 {
     protected static ?string $model = FacultyAssignment::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-user-plus';
+    protected static ?string $navigationIcon = 'heroicon-o-academic-cap';
 
-    protected static ?string $navigationGroup = null;
+    protected static ?string $navigationGroup = 'People & Enrollments';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form
     {

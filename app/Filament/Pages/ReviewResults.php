@@ -20,9 +20,9 @@ class ReviewResults extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
+    protected static ?string $navigationIcon = 'heroicon-o-chart-bar-square';
 
-    protected static ?string $navigationGroup = 'Reviews & Audits';
+    protected static ?string $navigationGroup = 'Analytics & Reports';
 
     protected static ?int $navigationSort = 1;
 

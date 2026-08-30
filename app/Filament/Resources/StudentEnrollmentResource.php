@@ -17,11 +17,11 @@ class StudentEnrollmentResource extends Resource
 {
     protected static ?string $model = StudentEnrollment::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-academic-cap';
+    protected static ?string $navigationIcon = 'heroicon-o-identification';
 
-    protected static ?string $navigationGroup = null;
+    protected static ?string $navigationGroup = 'People & Enrollments';
 
-    protected static ?int $navigationSort = 2;
+    protected static ?int $navigationSort = 3;
 
     public static function form(Form $form): Form
     {

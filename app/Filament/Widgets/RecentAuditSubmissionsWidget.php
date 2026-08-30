@@ -11,7 +11,7 @@ use Filament\Widgets\TableWidget as BaseWidget;
 
 class RecentAuditSubmissionsWidget extends BaseWidget
 {
-    protected static ?int $sort = 5;
+    protected static ?int $sort = 2;
 
     protected int | string | array $columnSpan = [
         'md' => 1,

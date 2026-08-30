@@ -23,9 +23,9 @@ class ReviewQuestionResource extends Resource
 
     protected static ?string $navigationLabel = 'Review Questions';
 
-    protected static ?string $navigationIcon = 'heroicon-o-document-text';
+    protected static ?string $navigationIcon = 'heroicon-o-chat-bubble-bottom-center-text';
 
-    protected static ?string $navigationGroup = 'Evaluation Config';
+    protected static ?string $navigationGroup = 'Evaluation Instruments';
 
     protected static ?int $navigationSort = 1;
 
