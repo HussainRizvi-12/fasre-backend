@@ -1,0 +1,138 @@
+/* FASRE Academic Precision Custom Admin Stylesheet */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+    --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --navy-primary: #00236f;
+    --navy-dark: #16215e;
+    --navy-light: #1e3a8a;
+    --gold-accent: #f5c518;
+}
+
+body {
+    font-family: var(--font-body) !important;
+    background-color: #f8fafc !important;
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.04) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(245, 197, 24, 0.03) 0px, transparent 50%) !important;
+    background-attachment: fixed !important;
+}
+
+.dark body {
+    background-color: #0b1120 !important;
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(245, 197, 24, 0.05) 0px, transparent 50%) !important;
+}
+
+h1, h2, h3, .fi-header-heading, .fi-ta-header-title {
+    font-family: var(--font-display) !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* Glassmorphic Topbar */
+.fi-topbar {
+    backdrop-filter: blur(16px) !important;
+    background-color: rgba(255, 255, 255, 0.85) !important;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8) !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02) !important;
+}
+
+.dark .fi-topbar {
+    background-color: rgba(15, 23, 42, 0.85) !important;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.8) !important;
+}
+
+/* Glassmorphic Sidebar */
+.fi-sidebar {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(12px) !important;
+    border-right: 1px solid rgba(226, 232, 240, 0.8) !important;
+}
+
+.dark .fi-sidebar {
+    background-color: rgba(15, 23, 42, 0.95) !important;
+    border-right: 1px solid rgba(30, 41, 59, 0.8) !important;
+}
+
+/* Sidebar Active Item */
+.fi-sidebar-item-active > a, 
+.fi-sidebar-item-active > button {
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.12) 0%, rgba(37, 99, 235, 0.08) 100%) !important;
+    color: #1e3a8a !important;
+    font-weight: 600 !important;
+    border-left: 3px solid #f5c518 !important;
+    border-radius: 0 0.5rem 0.5rem 0 !important;
+}
+
+.dark .fi-sidebar-item-active > a, 
+.dark .fi-sidebar-item-active > button {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(30, 58, 138, 0.15) 100%) !important;
+    color: #93c5fd !important;
+    border-left: 3px solid #f5c518 !important;
+}
+
+/* Rounded Cards */
+.fi-section, .fi-wi-card, .fi-ta-ctn {
+    border-radius: 1rem !important;
+    border: 1px solid rgba(226, 232, 240, 0.8) !important;
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05) !important;
+}
+
+.dark .fi-section, .dark .fi-wi-card, .dark .fi-ta-ctn {
+    border: 1px solid rgba(30, 41, 59, 0.8) !important;
+    background-color: rgba(15, 23, 42, 0.85) !important;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Stat Cards */
+.fi-wi-stats-overview-stat {
+    border-radius: 0.875rem !important;
+    border: 1px solid rgba(226, 232, 240, 0.8) !important;
+    background: linear-gradient(180deg, #ffffff 0%, #fcfdfe 100%) !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.fi-wi-stats-overview-stat::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #1e3a8a, #3b82f6, #f5c518);
+}
+
+.dark .fi-wi-stats-overview-stat {
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
+    border: 1px solid rgba(51, 65, 85, 0.8) !important;
+}
+
+/* Table Headers */
+.fi-ta-table thead th {
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: #64748b !important;
+    background-color: #f8fafc !important;
+}
+
+.dark .fi-ta-table thead th {
+    color: #94a3b8 !important;
+    background-color: #0f172a !important;
+}
+
+/* Primary Button */
+.fi-btn-color-primary {
+    background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 2px 4px rgba(30, 58, 138, 0.25) !important;
+}
+
+.fi-btn-color-primary:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%) !important;
+}
