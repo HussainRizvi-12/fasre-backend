@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreDepartmentRequest;
 use App\Http\Requests\Admin\UpdateDepartmentRequest;
 use App\Models\Department;
+use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 
 class DepartmentController extends Controller
@@ -21,6 +22,8 @@ class DepartmentController extends Controller
     public function store(StoreDepartmentRequest $request): JsonResponse
     {
         $department = Department::create($request->validated());
+
+        ActivityLogger::log($department, 'department_created', ['name' => $department->name]);
 
         return response()->json([
             'data' => $department,

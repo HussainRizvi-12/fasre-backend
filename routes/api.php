@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Controllers\Admin\ActivityLogController;
 use App\Http\Controllers\Admin\AuditAssignmentController;
+use App\Http\Controllers\Admin\BulkImportController;
 use App\Http\Controllers\Admin\CourseController;
 use App\Http\Controllers\Admin\DepartmentController;
+use App\Http\Controllers\Admin\ExportController;
 use App\Http\Controllers\Admin\FacultyAssignmentController;
 use App\Http\Controllers\Admin\QuestionController;
 use App\Http\Controllers\Admin\ReviewResultsController;
@@ -11,7 +14,9 @@ use App\Http\Controllers\Admin\SectionController;
 use App\Http\Controllers\Admin\StudentEnrollmentController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Faculty\FacultyAuditController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Student\StudentReviewController;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsFaculty;
@@ -22,6 +27,8 @@ $registerApiRoutes = function () {
     // ── Auth (Public) ───────────────────────────────────────────────
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
     Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+    Route::post('/forgot-password', [PasswordResetController::class, 'forgot'])->middleware('throttle:6,1');
+    Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:6,1');
 
     // ── Auth (Protected) ────────────────────────────────────────────
     Route::middleware('auth:sanctum')->group(function () {
@@ -29,10 +36,11 @@ $registerApiRoutes = function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
-        // Notifications (graceful fallback)
-        Route::get('/notifications', fn () => response()->json(['data' => []]));
-        Route::patch('/notifications/{id}/read', fn () => response()->json(['message' => 'Marked as read.']));
-        Route::patch('/notifications/read-all', fn () => response()->json(['message' => 'All marked as read.']));
+        // Notifications (in-app + email; per-user feed)
+        Route::get('/notifications', [NotificationController::class, 'index']);
+        Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+        Route::patch('/notifications/{id}/read', [NotificationController::class, 'markRead']);
     });
 
     // ── Admin APIs ──────────────────────────────────────────────────
@@ -79,6 +87,21 @@ $registerApiRoutes = function () {
                 ->only(['index', 'store', 'show']);
             Route::post('audit-assignments/{id}/approve', [AuditAssignmentController::class, 'approve']);
             Route::post('audit-assignments/{id}/reject', [AuditAssignmentController::class, 'reject']);
+
+            // Bulk CSV import (users, courses, sections, enrollments, faculty assignments)
+            Route::post('bulk-import', [BulkImportController::class, 'import']);
+
+            // Exports (CSV downloads for archival / reporting)
+            Route::get('export/users', [ExportController::class, 'users']);
+            Route::get('export/courses', [ExportController::class, 'courses']);
+            Route::get('export/sections', [ExportController::class, 'sections']);
+            Route::get('export/enrollments', [ExportController::class, 'enrollments']);
+            Route::get('export/review-results', [ExportController::class, 'reviewResults']);
+            Route::get('export/audit-assignments', [ExportController::class, 'auditAssignments']);
+            Route::get('export/activity-logs', [ExportController::class, 'activityLogs']);
+
+            // Admin activity trail (accountability)
+            Route::get('activity-logs', [ActivityLogController::class, 'index']);
         });
 
     // ── Student Review APIs ─────────────────────────────────────────

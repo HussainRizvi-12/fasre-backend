@@ -5,11 +5,15 @@ namespace App\Http\Controllers\Faculty;
 use App\Enums\AuditAssignmentStatus;
 use App\Enums\FormType;
 use App\Enums\QuestionType;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Faculty\SaveAuditDraftRequest;
 use App\Http\Requests\Faculty\SubmitAuditRequest;
 use App\Models\AuditAssignment;
 use App\Models\Question;
+use App\Models\User;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -207,6 +211,21 @@ class FacultyAuditController extends Controller
             'status' => AuditAssignmentStatus::Submitted,
             'submitted_at' => now(),
         ]);
+
+        ActivityLogger::log($audit, 'audit.submitted', [
+            'auditor' => $audit->auditor?->name,
+            'auditee' => $audit->auditee?->name,
+            'score' => $totalScore,
+        ]);
+
+        // Notify all admins that an audit awaits their decision.
+        NotificationService::sendMany(
+            User::where('role', UserRole::Admin)->where('is_active', true)->get(),
+            'audit',
+            'Audit submitted for review',
+            "{$audit->auditor?->name} submitted a peer audit of {$audit->auditee?->name}".($totalScore !== null ? " (score: {$totalScore}/100)" : '').'. Awaiting your decision in the portal.',
+            ['audit_assignment_id' => $audit->id],
+        );
 
         return response()->json([
             'message' => 'Audit submitted successfully.',

@@ -7,6 +7,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreReviewWindowRequest;
 use App\Http\Requests\Admin\UpdateReviewWindowRequest;
 use App\Models\ReviewWindow;
+use App\Models\User;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 
 class ReviewWindowController extends Controller
@@ -74,6 +77,17 @@ class ReviewWindowController extends Controller
 
         $reviewWindow->update(['status' => ReviewWindowStatus::Active]);
 
+        ActivityLogger::log($reviewWindow, 'review_window.activated', ['title' => $reviewWindow->title]);
+
+        // Notify every active student that the evaluation cycle is open.
+        NotificationService::sendMany(
+            User::where('role', 'student')->where('is_active', true)->get(),
+            'window',
+            'Review window is now open',
+            "'{$reviewWindow->title}' is now open. Submit your anonymous course evaluations before it closes on {$reviewWindow->ends_at->toFormattedDateString()}.",
+            ['review_window_id' => $reviewWindow->id, 'route' => '/courses'],
+        );
+
         return response()->json([
             'data' => $reviewWindow->fresh(),
             'message' => 'Review window activated successfully.',
@@ -94,6 +108,8 @@ class ReviewWindowController extends Controller
 
         $reviewWindow->update(['status' => ReviewWindowStatus::Closed]);
 
+        ActivityLogger::log($reviewWindow, 'review_window.closed', ['title' => $reviewWindow->title]);
+
         return response()->json([
             'data' => $reviewWindow->fresh(),
             'message' => 'Review window closed successfully.',
@@ -113,6 +129,17 @@ class ReviewWindowController extends Controller
         }
 
         $reviewWindow->update(['status' => ReviewWindowStatus::Published]);
+
+        ActivityLogger::log($reviewWindow, 'review_window.published', ['title' => $reviewWindow->title]);
+
+        // Notify students that aggregated results are now viewable.
+        NotificationService::sendMany(
+            User::where('role', 'student')->where('is_active', true)->get(),
+            'result',
+            'Evaluation results published',
+            "Aggregated results for '{$reviewWindow->title}' are now available in the Published Results tab.",
+            ['review_window_id' => $reviewWindow->id, 'route' => '/results'],
+        );
 
         return response()->json([
             'data' => $reviewWindow->fresh(),

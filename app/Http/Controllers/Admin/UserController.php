@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,8 +24,34 @@ class UserController extends Controller
             $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
         }
 
+        if ($request->filled('search')) {
+            $term = '%'.$request->input('search').'%';
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', $term)->orWhere('email', 'like', $term);
+            });
+        }
+
+        // Backward-compatible: paginated=false (or per_page=all) returns all rows.
+        $paginated = $request->query('paginated', 'false') === 'true' || $request->query('paginated') === '1';
+
+        if ($paginated) {
+            $perPage = min((int) $request->query('per_page', '50'), 200);
+            $paginator = $query->orderBy('name')->paginate($perPage);
+
+            return response()->json([
+                'data' => collect($paginator->items()),
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                ],
+                'message' => 'Users retrieved successfully.',
+            ]);
+        }
+
         return response()->json([
-            'data' => $query->get(),
+            'data' => $query->orderBy('name')->get(),
             'message' => 'Users retrieved successfully.',
         ]);
     }
@@ -32,6 +59,8 @@ class UserController extends Controller
     public function store(StoreUserRequest $request): JsonResponse
     {
         $user = User::create($request->validated());
+
+        ActivityLogger::log($user, 'user.created', ['name' => $user->name, 'role' => $user->role->value]);
 
         return response()->json([
             'data' => $user,
@@ -51,6 +80,8 @@ class UserController extends Controller
     {
         $user->update($request->validated());
 
+        ActivityLogger::log($user, 'user.updated', ['name' => $user->name]);
+
         return response()->json([
             'data' => $user->fresh(),
             'message' => 'User updated successfully.',
@@ -59,6 +90,8 @@ class UserController extends Controller
 
     public function destroy(User $user): JsonResponse
     {
+        ActivityLogger::log(null, 'user.deleted', ['name' => $user->name, 'email' => $user->email]);
+
         $user->delete();
 
         return response()->json([

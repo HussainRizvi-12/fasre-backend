@@ -6,6 +6,8 @@ use App\Enums\AuditAssignmentStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreAuditAssignmentRequest;
 use App\Models\AuditAssignment;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -44,6 +46,27 @@ class AuditAssignmentController extends Controller
             'status' => AuditAssignmentStatus::Assigned,
             'due_date' => $request->filled('due_date') ? $request->input('due_date') : null,
         ]);
+
+        ActivityLogger::log($assignment, 'audit_assignment.created', [
+            'auditor' => $assignment->auditor?->name,
+            'auditee' => $assignment->auditee?->name,
+        ]);
+
+        $dueText = $assignment->due_date ? " by {$assignment->due_date->toFormattedDateString()}" : '';
+        NotificationService::send(
+            $assignment->auditor,
+            'audit',
+            'New peer audit assigned',
+            "You have been assigned to audit {$assignment->auditee?->name}'s class{$dueText}. Open the Assigned Audits tab to begin.",
+            ['audit_assignment_id' => $assignment->id, 'route' => '/'],
+        );
+        NotificationService::send(
+            $assignment->auditee,
+            'audit',
+            'Peer audit scheduled',
+            "{$assignment->auditor?->name} will observe your class{$dueText}. No action is needed from you right now.",
+            ['audit_assignment_id' => $assignment->id],
+        );
 
         return response()->json([
             'data' => $this->transform($assignment->load(['auditor', 'auditee', 'section.course'])),
@@ -85,6 +108,26 @@ class AuditAssignmentController extends Controller
             'approved_at' => now(),
         ]);
 
+        ActivityLogger::log($assignment, 'audit_assignment.approved', [
+            'auditee' => $assignment->auditee?->name,
+            'score' => $assignment->total_score,
+        ]);
+
+        NotificationService::send(
+            $assignment->auditee,
+            'audit',
+            'Peer audit report approved',
+            "Your peer audit report ({$assignment->total_score}/100) has been approved and finalized. View it in the My Reports tab.",
+            ['audit_assignment_id' => $assignment->id, 'route' => '/reports'],
+        );
+        NotificationService::send(
+            $assignment->auditor,
+            'audit',
+            'Audit approved by admin',
+            "Your audit of {$assignment->auditee?->name} has been approved by the Quality Assurance office.",
+            ['audit_assignment_id' => $assignment->id],
+        );
+
         return response()->json([
             'data' => $this->transform($assignment->load(['auditor', 'auditee', 'section.course'])),
             'message' => 'Audit approved successfully.',
@@ -114,6 +157,19 @@ class AuditAssignmentController extends Controller
             'admin_remarks' => $request->input('admin_remarks'),
             'rejected_at' => now(),
         ]);
+
+        ActivityLogger::log($assignment, 'audit_assignment.rejected', [
+            'auditor' => $assignment->auditor?->name,
+            'remarks' => $request->input('admin_remarks'),
+        ]);
+
+        NotificationService::send(
+            $assignment->auditor,
+            'audit',
+            'Audit sent back for revision',
+            "Your audit of {$assignment->auditee?->name} was sent back with remarks: \"{$request->input('admin_remarks')}\" Please revise and resubmit.",
+            ['audit_assignment_id' => $assignment->id, 'route' => '/'],
+        );
 
         return response()->json([
             'data' => $this->transform($assignment->load(['auditor', 'auditee', 'section.course'])),
