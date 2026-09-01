@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AuditAssignmentController;
 use App\Http\Controllers\Admin\CourseController;
 use App\Http\Controllers\Admin\DepartmentController;
 use App\Http\Controllers\Admin\FacultyAssignmentController;
@@ -72,6 +73,12 @@ $registerApiRoutes = function () {
 
             // Review Results Aggregation (Phase 6)
             Route::get('review-results', [ReviewResultsController::class, 'index']);
+
+            // Audit Assignments (Admin management API for the web portal)
+            Route::apiResource('audit-assignments', AuditAssignmentController::class)
+                ->only(['index', 'store', 'show']);
+            Route::post('audit-assignments/{id}/approve', [AuditAssignmentController::class, 'approve']);
+            Route::post('audit-assignments/{id}/reject', [AuditAssignmentController::class, 'reject']);
         });
 
     // ── Student Review APIs ─────────────────────────────────────────
