@@ -6,6 +6,10 @@ server {
     root /home/site/wwwroot/public;
     index index.php index.html index.htm;
 
+    # Prevent Nginx from leaking internal container port 8080 during directory redirects
+    port_in_redirect off;
+    absolute_redirect off;
+
     # Charset
     charset utf-8;
 
