@@ -18,6 +18,15 @@ server {
     gzip_comp_level 6;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
+    # Serve React SPA admin portal directly with 200 OK (no 301 redirect)
+    location = /admin {
+        try_files /admin/index.html /index.php?$query_string;
+    }
+
+    location ^~ /admin/ {
+        try_files $uri $uri/ /admin/index.html /index.php?$query_string;
+    }
+
     location / {
         try_files $uri $uri/ /index.php?$query_string;
     }
