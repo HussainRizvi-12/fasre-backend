@@ -32,7 +32,7 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
 }
 
 /* --------------------------------------------------------------------------
-   Sidebar Navigation (Academic Navy & Gold)
+   Sidebar Navigation (Academic Navy & High Contrast Light Text)
    -------------------------------------------------------------------------- */
 .fi-sidebar {
     background: linear-gradient(180deg, #0a1329 0%, #00194e 100%) !important;
@@ -49,21 +49,32 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
     text-decoration: none !important;
 }
 
-.fi-sidebar-group-label {
-    color: #94a3b8 !important;
-    font-size: 0.68rem !important;
+.fi-sidebar-group-label,
+.fi-sidebar-group-label span,
+.fi-sidebar-group-label button,
+.fi-sidebar-group-label button span {
+    color: #93c5fd !important;
+    font-size: 0.7rem !important;
     font-weight: 800 !important;
     text-transform: uppercase !important;
     letter-spacing: 0.12em !important;
 }
 
 .fi-sidebar-item a, 
-.fi-sidebar-item button {
-    color: #e2e8f0 !important;
-    font-size: 0.82rem !important;
+.fi-sidebar-item button,
+.fi-sidebar-item-btn {
+    color: #f1f5f9 !important;
+    font-size: 0.84rem !important;
     font-weight: 500 !important;
     border-radius: 0.625rem !important;
     transition: all 0.18s ease-in-out !important;
+}
+
+.fi-sidebar-item a span, 
+.fi-sidebar-item button span,
+.fi-sidebar-item-label {
+    color: #e2e8f0 !important;
+    font-weight: 500 !important;
 }
 
 .fi-sidebar-item a svg, 
@@ -74,7 +85,12 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
 
 .fi-sidebar-item:hover a, 
 .fi-sidebar-item:hover button {
-    background-color: rgba(255, 255, 255, 0.1) !important;
+    background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.fi-sidebar-item:hover a span, 
+.fi-sidebar-item:hover button span,
+.fi-sidebar-item:hover .fi-sidebar-item-label {
     color: #ffffff !important;
 }
 
@@ -86,15 +102,14 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
 /* Sidebar Active Link Pill */
 .fi-sidebar-item-active a, 
 .fi-sidebar-item-active button {
-    background: linear-gradient(135deg, rgba(30, 58, 138, 0.8) 0%, rgba(37, 99, 235, 0.7) 100%) !important;
-    color: #ffffff !important;
-    font-weight: 700 !important;
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.85) 0%, rgba(37, 99, 235, 0.75) 100%) !important;
     border-left: 3px solid var(--fasre-gold) !important;
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
 }
 
 .fi-sidebar-item-active a span,
-.fi-sidebar-item-active button span {
+.fi-sidebar-item-active button span,
+.fi-sidebar-item-active .fi-sidebar-item-label {
     color: #ffffff !important;
     font-weight: 700 !important;
 }
@@ -120,7 +135,7 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
 }
 
 /* --------------------------------------------------------------------------
-   Dashboard Full Width Elements
+   Dashboard Hero Widget Container
    -------------------------------------------------------------------------- */
 .fi-wi-dashboard-hero,
 .fi-widgets-grid > :first-child {

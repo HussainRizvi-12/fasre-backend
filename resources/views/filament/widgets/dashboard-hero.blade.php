@@ -1,6 +1,6 @@
 <x-filament-widgets::widget>
     @php
-        $activeWindow = \App\Models\ReviewWindow::where('status', \App\Enums\ReviewWindowStatus::Active)->first();
+        $activeWindow = \App\Models\ReviewWindow::where('status', \App\Enums\ReviewWindowStatus::Active->value)->first();
     @endphp
 
     <div class="relative overflow-hidden rounded-2xl p-6 sm:p-7 shadow-xl w-full" style="background: linear-gradient(135deg, #00143d 0%, #0a1b4d 50%, #172a6b 100%); border: 1px solid rgba(59, 130, 246, 0.3); color: #ffffff; isolation: isolate; max-width: 100%;">
