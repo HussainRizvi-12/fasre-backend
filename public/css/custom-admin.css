@@ -1,24 +1,33 @@
 /* ==========================================================================
    FASRE — Faculty Audit & Student Review Ecosystem
-   Premium Institutional Design System & Theme Stylesheet
+   Institutional Design System v2 — "Clean Academic" (matches new UI/UX)
+   Palette: Navy #1E3A8A · Gold #F5C518 · Slate · Light #F8F9FB / Dark #070D1E
+   Font: Plus Jakarta Sans
    ========================================================================== */
 
 :root {
-    --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --fasre-navy-deep: #00194e;
-    --fasre-navy-dark: #0a1329;
-    --fasre-navy-primary: #1e3a8a;
-    --fasre-navy-light: #2563eb;
+
+    --fasre-navy: #1e3a8a;
+    --fasre-navy-mid: #2546a8;
+    --fasre-navy-deep: #0e153f;
     --fasre-gold: #f5c518;
-    --fasre-gold-hover: #eab308;
-    --fasre-surface-light: #f8fafc;
+    --fasre-gold-dark: #d4a50f;
+    --fasre-surface: #f8f9fb;
     --fasre-surface-dark: #070d1e;
+    --fasre-card-dark: #0f172a;
+    --fasre-border: #e2e8f0;
+    --fasre-border-dark: #1e293b;
+    --fasre-ink: #0f172a;
 }
 
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
 body {
     font-family: var(--font-body) !important;
-    background-color: var(--fasre-surface-light) !important;
+    background-color: var(--fasre-surface) !important;
     -webkit-font-smoothing: antialiased;
 }
 
@@ -29,82 +38,117 @@ body {
 h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
     font-family: var(--font-display) !important;
     letter-spacing: -0.02em !important;
+    font-weight: 800 !important;
+}
+
+/* Main content canvas */
+.fi-main, .fi-layout-main {
+    background-color: transparent !important;
 }
 
 /* --------------------------------------------------------------------------
-   Sidebar Navigation (Academic Navy & High Contrast Light Text)
+   Sidebar — clean white card rail (light) / slate (dark)
    -------------------------------------------------------------------------- */
 .fi-sidebar {
-    background: linear-gradient(180deg, #0a1329 0%, #00194e 100%) !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25) !important;
+    background-color: #ffffff !important;
+    border-right: 1px solid var(--fasre-border) !important;
+    box-shadow: none !important;
+}
+
+.dark .fi-sidebar {
+    background-color: #0b1120 !important;
+    border-right-color: var(--fasre-border-dark) !important;
 }
 
 .fi-sidebar-header {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-    background-color: rgba(0, 0, 0, 0.15) !important;
+    background-color: transparent !important;
+    border-bottom: 1px solid var(--fasre-border) !important;
+}
+
+.dark .fi-sidebar-header {
+    border-bottom-color: var(--fasre-border-dark) !important;
 }
 
 .fi-sidebar-header a {
     text-decoration: none !important;
 }
 
+/* Group labels — muted uppercase tracking */
 .fi-sidebar-group-label,
 .fi-sidebar-group-label span,
 .fi-sidebar-group-label button,
 .fi-sidebar-group-label button span {
-    color: #93c5fd !important;
-    font-size: 0.7rem !important;
+    color: #94a3b8 !important;
+    font-size: 0.65rem !important;
     font-weight: 800 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.12em !important;
+    letter-spacing: 0.14em !important;
 }
 
-.fi-sidebar-item a, 
+/* Items */
+.fi-sidebar-item a,
 .fi-sidebar-item button,
 .fi-sidebar-item-btn {
-    color: #f1f5f9 !important;
-    font-size: 0.84rem !important;
-    font-weight: 500 !important;
-    border-radius: 0.625rem !important;
-    transition: all 0.18s ease-in-out !important;
+    color: #475569 !important;
+    font-size: 0.83rem !important;
+    font-weight: 600 !important;
+    border-radius: 0.75rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    transition: all 0.16s ease-in-out !important;
 }
 
-.fi-sidebar-item a span, 
+.fi-sidebar-item a span,
 .fi-sidebar-item button span,
 .fi-sidebar-item-label {
-    color: #e2e8f0 !important;
-    font-weight: 500 !important;
+    color: #475569 !important;
+    font-weight: 600 !important;
 }
 
-.fi-sidebar-item a svg, 
+.fi-sidebar-item a svg,
 .fi-sidebar-item button svg {
     color: #94a3b8 !important;
-    transition: color 0.18s ease-in-out !important;
+    transition: color 0.16s ease-in-out !important;
 }
 
-.fi-sidebar-item:hover a, 
+/* Hover — soft slate wash */
+.fi-sidebar-item:hover a,
 .fi-sidebar-item:hover button {
-    background-color: rgba(255, 255, 255, 0.12) !important;
+    background-color: #f1f5f9 !important;
 }
 
-.fi-sidebar-item:hover a span, 
+.fi-sidebar-item:hover a span,
 .fi-sidebar-item:hover button span,
 .fi-sidebar-item:hover .fi-sidebar-item-label {
+    color: #0f172a !important;
+}
+
+.fi-sidebar-item:hover a svg,
+.fi-sidebar-item:hover button svg {
+    color: var(--fasre-navy) !important;
+}
+
+.dark .fi-sidebar-item:hover a,
+.dark .fi-sidebar-item:hover button {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.dark .fi-sidebar-item a span,
+.dark .fi-sidebar-item button span,
+.dark .fi-sidebar-item-label {
+    color: #cbd5e1 !important;
+}
+
+.dark .fi-sidebar-item:hover a span,
+.dark .fi-sidebar-item:hover button span {
     color: #ffffff !important;
 }
 
-.fi-sidebar-item:hover a svg, 
-.fi-sidebar-item:hover button svg {
-    color: var(--fasre-gold) !important;
-}
-
-/* Sidebar Active Link Pill */
-.fi-sidebar-item-active a, 
+/* Active — navy pill with glow + gold accent icon */
+.fi-sidebar-item-active a,
 .fi-sidebar-item-active button {
-    background: linear-gradient(135deg, rgba(30, 58, 138, 0.85) 0%, rgba(37, 99, 235, 0.75) 100%) !important;
-    border-left: 3px solid var(--fasre-gold) !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+    background: linear-gradient(135deg, var(--fasre-navy) 0%, var(--fasre-navy-mid) 100%) !important;
+    box-shadow: 0 6px 16px -4px rgba(30, 58, 138, 0.45) !important;
 }
 
 .fi-sidebar-item-active a span,
@@ -114,24 +158,24 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
     font-weight: 700 !important;
 }
 
-.fi-sidebar-item-active a svg, 
+.fi-sidebar-item-active a svg,
 .fi-sidebar-item-active button svg {
     color: var(--fasre-gold) !important;
 }
 
 /* --------------------------------------------------------------------------
-   Topbar
+   Topbar — glass blur
    -------------------------------------------------------------------------- */
 .fi-topbar {
-    background-color: rgba(255, 255, 255, 0.92) !important;
+    background-color: rgba(255, 255, 255, 0.88) !important;
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
-    border-bottom: 1px solid #e2e8f0 !important;
+    border-bottom: 1px solid var(--fasre-border) !important;
 }
 
 .dark .fi-topbar {
-    background-color: rgba(10, 19, 41, 0.9) !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background-color: rgba(11, 17, 32, 0.88) !important;
+    border-bottom-color: var(--fasre-border-dark) !important;
 }
 
 /* --------------------------------------------------------------------------
@@ -143,16 +187,16 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
 }
 
 /* --------------------------------------------------------------------------
-   Stat Overview Cards (KPIs)
+   Stat Overview Cards (KPIs) — rounded-2xl with gold gradient top rail
    -------------------------------------------------------------------------- */
 .fi-wi-stats-overview-stat {
     border-radius: 1rem !important;
-    border: 1px solid #e2e8f0 !important;
+    border: 1px solid var(--fasre-border) !important;
     background: #ffffff !important;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02) !important;
     position: relative;
     overflow: hidden;
-    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
 }
 
 .fi-wi-stats-overview-stat::before {
@@ -168,25 +212,27 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
 
 .fi-wi-stats-overview-stat:hover {
     transform: translateY(-2px);
+    border-color: #cbd5e1 !important;
     box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
 }
 
 .dark .fi-wi-stats-overview-stat {
-    background: #0f172a !important;
-    border-color: #1e293b !important;
+    background: var(--fasre-card-dark) !important;
+    border-color: var(--fasre-border-dark) !important;
     box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4) !important;
 }
 
 .dark .fi-wi-stats-overview-stat:hover {
+    border-color: #334155 !important;
     box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.6) !important;
 }
 
 /* --------------------------------------------------------------------------
-   Tables & Sections
+   Tables & Sections — rounded cards
    -------------------------------------------------------------------------- */
 .fi-ta-ctn, .fi-section {
     border-radius: 1rem !important;
-    border: 1px solid #e2e8f0 !important;
+    border: 1px solid var(--fasre-border) !important;
     background-color: #ffffff !important;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
 }
@@ -196,31 +242,42 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
 }
 
 .dark .fi-ta-ctn, .dark .fi-section {
-    border-color: #1e293b !important;
-    background-color: #0f172a !important;
+    border-color: var(--fasre-border-dark) !important;
+    background-color: var(--fasre-card-dark) !important;
     box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3) !important;
 }
 
+/* Table headers — muted uppercase tracking (matches DataTable design) */
 .fi-ta-table thead th {
-    font-size: 0.72rem !important;
-    font-weight: 700 !important;
+    font-size: 0.68rem !important;
+    font-weight: 800 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.06em !important;
+    letter-spacing: 0.08em !important;
+    color: #94a3b8 !important;
+    background-color: #ffffff !important;
+    border-bottom: 1px solid var(--fasre-border) !important;
+    padding-top: 0.8rem !important;
+    padding-bottom: 0.8rem !important;
+}
+
+.dark .fi-ta-table thead th {
     color: #64748b !important;
-    background-color: #f8fafc !important;
-    border-bottom: 1px solid #e2e8f0 !important;
+    background-color: var(--fasre-card-dark) !important;
+    border-bottom-color: var(--fasre-border-dark) !important;
+}
+
+/* Row rhythm */
+.fi-ta-table tbody td {
     padding-top: 0.75rem !important;
     padding-bottom: 0.75rem !important;
 }
 
-.dark .fi-ta-table thead th {
-    color: #94a3b8 !important;
-    background-color: #0b1120 !important;
-    border-bottom: 1px solid #1e293b !important;
+.fi-ta-row {
+    transition: background-color 0.15s ease !important;
 }
 
 .fi-ta-row:hover {
-    background-color: rgba(241, 245, 249, 0.7) !important;
+    background-color: rgba(241, 245, 249, 0.8) !important;
 }
 
 .dark .fi-ta-row:hover {
@@ -228,26 +285,186 @@ h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
 }
 
 /* --------------------------------------------------------------------------
-   Buttons & Badges
+   Buttons — navy gradient primary, soft secondary
    -------------------------------------------------------------------------- */
+.fi-btn {
+    border-radius: 0.625rem !important;
+    font-weight: 700 !important;
+    transition: all 0.16s ease !important;
+}
+
 .fi-btn-color-primary {
-    background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%) !important;
+    background: linear-gradient(135deg, #1e3a8a 0%, #2546a8 100%) !important;
     box-shadow: 0 2px 6px rgba(30, 58, 138, 0.25) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    font-weight: 600 !important;
-    transition: all 0.18s ease !important;
 }
 
 .fi-btn-color-primary:hover {
-    background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%) !important;
+    background: linear-gradient(135deg, #2546a8 0%, #1e3a8a 100%) !important;
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
 }
 
+.fi-btn-color-warning {
+    background: linear-gradient(135deg, #f5c518 0%, #d4a50f 100%) !important;
+    color: #1c1917 !important;
+}
+
+.fi-btn-color-danger {
+    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
+}
+
+.fi-btn-color-success {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+}
+
+.fi-btn-color-gray {
+    background-color: #ffffff !important;
+    border: 1px solid var(--fasre-border) !important;
+    color: #334155 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+.fi-btn-color-gray:hover {
+    border-color: #cbd5e1 !important;
+    background-color: #f8fafc !important;
+}
+
+.dark .fi-btn-color-gray {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Badges — pill style
+   -------------------------------------------------------------------------- */
 .fi-badge {
     font-weight: 700 !important;
     letter-spacing: 0.02em !important;
     border-radius: 9999px !important;
+    padding: 0.2rem 0.65rem !important;
+    font-size: 0.68rem !important;
+}
+
+/* --------------------------------------------------------------------------
+   Inputs, Selects & Focus Rings
+   -------------------------------------------------------------------------- */
+.fi-input,
+.fi-select,
+.fi-textarea {
+    border-radius: 0.625rem !important;
+    border-color: var(--fasre-border) !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.fi-input:focus,
+.fi-select:focus,
+.fi-textarea:focus,
+.fi-input:focus-within,
+.fi-select:focus-within {
+    border-color: var(--fasre-navy) !important;
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.15) !important;
+}
+
+.fi-ac-input input:focus {
+    box-shadow: none !important;
+}
+
+.fi-checkbox-list-compact-input:focus,
+input[type="checkbox"]:focus {
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.15) !important;
+}
+
+/* Field labels — bold small */
+.fi-field-label,
+.fi-form-field-label,
+.fi-wi .fi-label,
+label.fi-label {
+    font-weight: 700 !important;
+    font-size: 0.75rem !important;
+}
+
+/* --------------------------------------------------------------------------
+   Modals & Panels
+   -------------------------------------------------------------------------- */
+.fi-modal-window {
+    border-radius: 1rem !important;
+    border: 1px solid var(--fasre-border) !important;
+    box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.35) !important;
+}
+
+.dark .fi-modal-window {
+    border-color: var(--fasre-border-dark) !important;
+}
+
+.fi-modal-heading {
+    font-weight: 800 !important;
+    letter-spacing: -0.01em !important;
+}
+
+/* --------------------------------------------------------------------------
+   Login (Simple Layout) — navy-deep canvas, glass ambience
+   -------------------------------------------------------------------------- */
+.fi-simple-layout {
+    background:
+        radial-gradient(ellipse at top, rgba(59, 130, 246, 0.10), transparent 55%),
+        radial-gradient(circle at 85% 90%, rgba(245, 197, 24, 0.10), transparent 45%),
+        linear-gradient(150deg, #0e153f 0%, #0a1128 55%, #070d1e 100%) !important;
+}
+
+.fi-simple-layout::before {
+    content: '';
+    position: fixed;
+    top: -160px;
+    left: -160px;
+    width: 480px;
+    height: 480px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(37, 70, 168, 0.35) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.fi-simple-layout::after {
+    content: '';
+    position: fixed;
+    bottom: -140px;
+    right: -120px;
+    width: 420px;
+    height: 420px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(245, 197, 24, 0.12) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.fi-simple-layout > div,
+.fi-simple-main {
+    position: relative;
+    z-index: 1;
+}
+
+.fi-simple-layout .fi-simple-card,
+.fi-simple-layout section,
+.fi-simple-layout .fi-ta-ctn {
+    border-radius: 1.5rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Header heading sizing
+   -------------------------------------------------------------------------- */
+.fi-header-heading {
+    font-size: 1.3rem !important;
+}
+
+.fi-header-subheading {
+    font-size: 0.8rem !important;
+    color: #64748b !important;
+}
+
+.dark .fi-header-subheading {
+    color: #94a3b8 !important;
 }
 
 /* --------------------------------------------------------------------------

@@ -1,16 +1,17 @@
 <x-filament-panels::page.simple>
     <x-slot name="heading">
-        <div class="text-center pb-1">
-            <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-3 shadow-md ring-1 ring-amber-400/40" style="background: linear-gradient(135deg, #00194e 0%, #1e3a8a 100%);">
-                <svg class="w-7 h-7 text-[#f5c518]" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z"/>
+        <div class="pb-1 text-center">
+            <div class="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl shadow-xl"
+                style="background: linear-gradient(135deg, #1e3a8a 0%, #2546a8 100%); box-shadow: 0 12px 28px -8px rgba(30, 58, 138, 0.55);">
+                <svg class="h-7 w-7" style="color: #f5c518;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M22 10 12 5 2 10l10 5 10-5zM6 12v5c3.3 2.5 8.7 2.5 12 0v-5"/>
                 </svg>
             </div>
-            <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white" style="font-family: 'Outfit', sans-serif;">
-                FASRE <span class="text-amber-500 font-bold">Admin Portal</span>
+            <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white" style="font-family: 'Plus Jakarta Sans', sans-serif;">
+                Sign in to <span class="text-navy-600 dark:text-sky-400" style="color: #1e3a8a;">FASRE</span>
             </h1>
-            <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">
-                Institutional Quality Assurance Administration
+            <p class="mt-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+                Faculty Audit &amp; Student Review Ecosystem — Administrator Access
             </p>
         </div>
     </x-slot>
@@ -45,29 +46,48 @@
         </x-filament-panels::form>
 
         {{-- 1-Click Demo Admin Access --}}
-        <div class="mt-6 pt-5 border-t border-slate-200/80 dark:border-slate-800">
+        <div class="mt-6 border-t border-slate-200/80 pt-5 dark:border-slate-800">
             <button
                 type="button"
                 @click="fillAdmin()"
-                class="w-full group flex items-center justify-between p-3 rounded-xl text-left bg-gradient-to-r from-blue-50/80 to-slate-50 dark:from-slate-800/80 dark:to-slate-800/50 hover:from-blue-100 hover:to-blue-50 dark:hover:from-slate-700/80 dark:hover:to-slate-800 border border-blue-200/80 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all cursor-pointer shadow-xs"
+                class="group flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-left shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50/60 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-blue-500 dark:hover:bg-slate-800"
             >
                 <div class="flex items-center gap-3">
-                    <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-600 text-white font-bold text-sm shadow-xs">
-                        🛡️
+                    <span class="flex h-9 w-9 items-center justify-center rounded-lg text-sm shadow-sm"
+                        style="background: linear-gradient(135deg, #1e3a8a 0%, #2546a8 100%);">
+                        <svg class="h-4 w-4" style="color: #f5c518;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
                     </span>
                     <div>
-                        <div class="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                            Autofill Demo Admin Credentials
+                        <div class="text-xs font-bold text-slate-900 group-hover:text-blue-700 dark:text-slate-100 dark:group-hover:text-blue-400">
+                            Autofill demo admin credentials
                         </div>
-                        <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                        <div class="font-mono text-[11px] text-slate-500 dark:text-slate-400">
                             admin@fasre.test &bull; Password@123
                         </div>
                     </div>
                 </div>
-                <span class="text-[11px] font-bold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform">
+                <span class="text-[11px] font-bold text-blue-600 transition-transform group-hover:translate-x-0.5 dark:text-blue-400">
                     Fill &rarr;
                 </span>
             </button>
+        </div>
+
+        {{-- Privacy & anonymity reassurance strip --}}
+        <div class="mt-5 flex items-center justify-center gap-4 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            <span class="flex items-center gap-1.5">
+                <svg class="h-3 w-3" style="color: #10b981;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                K&#8209;anonymity enforced
+            </span>
+            <span class="flex items-center gap-1.5">
+                <svg class="h-3 w-3" style="color: #10b981;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                Anonymous reviews
+            </span>
+            <span class="flex items-center gap-1.5">
+                <svg class="h-3 w-3" style="color: #10b981;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                Azure secured
+            </span>
         </div>
     </div>
 </x-filament-panels::page.simple>

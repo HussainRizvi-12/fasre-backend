@@ -11,7 +11,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
             </div>
-            <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100" style="font-family: 'Outfit', sans-serif;">
+            <h3 class="text-lg font-bold text-slate-800 dark:text-slate-100" style="font-family: 'Plus Jakarta Sans', sans-serif;">
                 No Review Window Selected
             </h3>
             <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 max-w-md mx-auto">
@@ -40,7 +40,7 @@
                                         {{ $section->term }} &bull; Sec {{ $section->name }}
                                     </span>
                                 </div>
-                                <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white" style="font-family: 'Outfit', sans-serif;">
+                                <h3 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white" style="font-family: 'Plus Jakarta Sans', sans-serif;">
                                     {{ $section->course?->title }}
                                 </h3>
                             </div>
