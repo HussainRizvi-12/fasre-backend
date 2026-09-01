@@ -93,8 +93,8 @@ class SubmitAuditRequest extends FormRequest
                 }
 
                 // Verify all required questions have non-empty answers
-                $submittedQuestionIds = $submittedAnswers->where('value', '!==', null)
-                    ->where('value', '!==', '')
+                $submittedQuestionIds = $submittedAnswers
+                    ->filter(fn ($a) => isset($a['value']) && $a['value'] !== '' && ! is_null($a['value']))
                     ->pluck('question_id')
                     ->all();
 

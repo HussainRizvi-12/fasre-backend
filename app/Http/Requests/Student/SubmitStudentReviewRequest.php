@@ -103,8 +103,8 @@ class SubmitStudentReviewRequest extends FormRequest
                 }
 
                 // Check that all required active questions have a non-empty answer
-                $submittedQuestionIds = $submittedAnswers->where('value', '!==', null)
-                    ->where('value', '!==', '')
+                $submittedQuestionIds = $submittedAnswers
+                    ->filter(fn ($a) => isset($a['value']) && $a['value'] !== '' && ! is_null($a['value']))
                     ->pluck('question_id')
                     ->all();
 

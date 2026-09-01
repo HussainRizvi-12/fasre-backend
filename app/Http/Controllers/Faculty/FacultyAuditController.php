@@ -130,6 +130,10 @@ class FacultyAuditController extends Controller
     {
         $audit = AuditAssignment::findOrFail($id);
 
+        if ($audit->auditor_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden. You are not the assigned auditor.'], 403);
+        }
+
         $submittedAnswers = $request->input('answers', []);
         $formattedAnswers = [];
         foreach ($submittedAnswers as $answer) {
@@ -158,6 +162,10 @@ class FacultyAuditController extends Controller
     public function submit(SubmitAuditRequest $request, int $id): JsonResponse
     {
         $audit = AuditAssignment::findOrFail($id);
+
+        if ($audit->auditor_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden. You are not the assigned auditor.'], 403);
+        }
 
         $submittedAnswers = $request->input('answers', []);
         $formattedAnswers = [];

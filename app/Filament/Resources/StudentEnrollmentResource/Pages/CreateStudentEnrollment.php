@@ -49,7 +49,7 @@ class CreateStudentEnrollment extends CreateRecord
                 ->send();
         }
 
-        return $lastRecord ?? StudentEnrollment::where('section_id', $sectionId)->first();
+        return $lastRecord ?? StudentEnrollment::where('section_id', $sectionId)->firstOrFail();
     }
 
     protected function getRedirectUrl(): string

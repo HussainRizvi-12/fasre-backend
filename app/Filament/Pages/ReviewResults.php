@@ -4,6 +4,7 @@ namespace App\Filament\Pages;
 
 use App\Enums\FormType;
 use App\Enums\QuestionType;
+use App\Enums\ReviewWindowStatus;
 use App\Models\Question;
 use App\Models\ReviewResponse;
 use App\Models\ReviewWindow;
@@ -37,7 +38,11 @@ class ReviewResults extends Page implements HasForms
     public function mount(): void
     {
         $this->review_window_id = request()->query('review_window_id')
-            ?? ReviewWindow::whereIn('status', ['active', 'published', 'closed'])->latest()->value('id');
+            ?? ReviewWindow::whereIn('status', [
+                ReviewWindowStatus::Active,
+                ReviewWindowStatus::Published,
+                ReviewWindowStatus::Closed,
+            ])->latest()->value('id');
 
         $this->form->fill([
             'review_window_id' => $this->review_window_id,

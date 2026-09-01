@@ -1,106 +1,96 @@
-/* FASRE Academic Precision Custom Admin Stylesheet - Production Polished */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+/* ==========================================================================
+   FASRE — Faculty Audit & Student Review Ecosystem
+   Premium Institutional Design System & Theme Stylesheet
+   ========================================================================== */
 
 :root {
     --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --navy-primary: #00236f;
-    --navy-dark: #16215e;
-    --navy-light: #1e3a8a;
-    --gold-accent: #f5c518;
+    --fasre-navy-deep: #00194e;
+    --fasre-navy-dark: #0a1329;
+    --fasre-navy-primary: #1e3a8a;
+    --fasre-navy-light: #2563eb;
+    --fasre-gold: #f5c518;
+    --fasre-gold-hover: #eab308;
+    --fasre-surface-light: #f8fafc;
+    --fasre-surface-dark: #070d1e;
 }
 
 body {
     font-family: var(--font-body) !important;
-    background-color: #f8fafc !important;
-    background-image: 
-        radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.04) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(245, 197, 24, 0.03) 0px, transparent 50%) !important;
-    background-attachment: fixed !important;
+    background-color: var(--fasre-surface-light) !important;
+    -webkit-font-smoothing: antialiased;
 }
 
 .dark body {
-    background-color: #070d1e !important;
-    background-image: 
-        radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.15) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(245, 197, 24, 0.05) 0px, transparent 50%) !important;
+    background-color: var(--fasre-surface-dark) !important;
 }
 
-h1, h2, h3, .fi-header-heading, .fi-ta-header-title {
+h1, h2, h3, h4, .fi-header-heading, .fi-ta-header-title {
     font-family: var(--font-display) !important;
     letter-spacing: -0.02em !important;
 }
 
-/* Glassmorphic Topbar */
-.fi-topbar {
-    backdrop-filter: blur(16px) !important;
-    background-color: #0a1329 !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25) !important;
-}
-
-.fi-topbar-item, .fi-topbar button, .fi-topbar a, .fi-topbar span {
-    color: #f1f5f9 !important;
-}
-
-/* High-Contrast Academic Navy Sidebar */
+/* --------------------------------------------------------------------------
+   Sidebar Navigation (Academic Navy & Gold)
+   -------------------------------------------------------------------------- */
 .fi-sidebar {
-    background: linear-gradient(180deg, #0a1329 0%, #060c1c 100%) !important;
+    background: linear-gradient(180deg, #0a1329 0%, #00194e 100%) !important;
     border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3) !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25) !important;
 }
 
 .fi-sidebar-header {
     border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-    background-color: rgba(255, 255, 255, 0.02) !important;
+    background-color: rgba(0, 0, 0, 0.15) !important;
 }
 
-/* Sidebar Navigation Text & High Contrast FIX */
+.fi-sidebar-header a {
+    text-decoration: none !important;
+}
+
 .fi-sidebar-group-label {
     color: #94a3b8 !important;
-    font-size: 0.72rem !important;
+    font-size: 0.68rem !important;
     font-weight: 800 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-    padding-top: 0.75rem !important;
+    letter-spacing: 0.12em !important;
 }
 
 .fi-sidebar-item a, 
-.fi-sidebar-item button,
-.fi-sidebar-item span {
-    color: #f1f5f9 !important;
-    font-size: 0.84rem !important;
-    font-weight: 600 !important;
+.fi-sidebar-item button {
+    color: #e2e8f0 !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
     border-radius: 0.625rem !important;
-    padding: 0.5rem 0.75rem !important;
-    transition: all 0.15s ease !important;
+    transition: all 0.18s ease-in-out !important;
 }
 
 .fi-sidebar-item a svg, 
 .fi-sidebar-item button svg {
-    color: #cbd5e1 !important;
-    transition: color 0.15s ease !important;
+    color: #94a3b8 !important;
+    transition: color 0.18s ease-in-out !important;
 }
 
 .fi-sidebar-item:hover a, 
 .fi-sidebar-item:hover button {
-    background-color: rgba(255, 255, 255, 0.12) !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
     color: #ffffff !important;
 }
 
 .fi-sidebar-item:hover a svg, 
 .fi-sidebar-item:hover button svg {
-    color: #f5c518 !important;
+    color: var(--fasre-gold) !important;
 }
 
-/* Sidebar Navigation Active State */
+/* Sidebar Active Link Pill */
 .fi-sidebar-item-active a, 
 .fi-sidebar-item-active button {
-    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%) !important;
+    background: linear-gradient(135deg, rgba(30, 58, 138, 0.8) 0%, rgba(37, 99, 235, 0.7) 100%) !important;
     color: #ffffff !important;
     font-weight: 700 !important;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35) !important;
-    border-left: 3px solid #f5c518 !important;
+    border-left: 3px solid var(--fasre-gold) !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
 }
 
 .fi-sidebar-item-active a span,
@@ -111,31 +101,43 @@ h1, h2, h3, .fi-header-heading, .fi-ta-header-title {
 
 .fi-sidebar-item-active a svg, 
 .fi-sidebar-item-active button svg {
-    color: #f5c518 !important;
+    color: var(--fasre-gold) !important;
 }
 
-/* Modern Card Polish */
-.fi-section, .fi-wi-card, .fi-ta-ctn {
-    border-radius: 1rem !important;
-    border: 1px solid rgba(226, 232, 240, 0.8) !important;
-    background-color: rgba(255, 255, 255, 0.95) !important;
-    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05) !important;
+/* --------------------------------------------------------------------------
+   Topbar
+   -------------------------------------------------------------------------- */
+.fi-topbar {
+    background-color: rgba(255, 255, 255, 0.92) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-bottom: 1px solid #e2e8f0 !important;
 }
 
-.dark .fi-section, .dark .fi-wi-card, .dark .fi-ta-ctn {
-    border: 1px solid rgba(30, 41, 59, 0.8) !important;
-    background-color: rgba(15, 23, 42, 0.85) !important;
-    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25) !important;
+.dark .fi-topbar {
+    background-color: rgba(10, 19, 41, 0.9) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Stat Cards Hover Animation */
+/* --------------------------------------------------------------------------
+   Dashboard Full Width Elements
+   -------------------------------------------------------------------------- */
+.fi-wi-dashboard-hero,
+.fi-widgets-grid > :first-child {
+    grid-column: 1 / -1 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Stat Overview Cards (KPIs)
+   -------------------------------------------------------------------------- */
 .fi-wi-stats-overview-stat {
-    border-radius: 0.875rem !important;
-    border: 1px solid rgba(226, 232, 240, 0.8) !important;
-    background: linear-gradient(180deg, #ffffff 0%, #fcfdfe 100%) !important;
-    transition: all 0.25s ease !important;
+    border-radius: 1rem !important;
+    border: 1px solid #e2e8f0 !important;
+    background: #ffffff !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02) !important;
     position: relative;
     overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
 }
 
 .fi-wi-stats-overview-stat::before {
@@ -146,67 +148,105 @@ h1, h2, h3, .fi-header-heading, .fi-ta-header-title {
     right: 0;
     height: 3px;
     background: linear-gradient(90deg, #1e3a8a, #3b82f6, #f5c518);
-    opacity: 0.9;
+    opacity: 0.95;
 }
 
 .fi-wi-stats-overview-stat:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 25px -5px rgba(30, 58, 138, 0.08) !important;
+    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
 }
 
 .dark .fi-wi-stats-overview-stat {
-    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%) !important;
-    border: 1px solid rgba(51, 65, 85, 0.8) !important;
+    background: #0f172a !important;
+    border-color: #1e293b !important;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4) !important;
 }
 
-/* Tables Refinement */
+.dark .fi-wi-stats-overview-stat:hover {
+    box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Tables & Sections
+   -------------------------------------------------------------------------- */
+.fi-ta-ctn, .fi-section {
+    border-radius: 1rem !important;
+    border: 1px solid #e2e8f0 !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+.fi-ta-content {
+    overflow-x: auto !important;
+}
+
+.dark .fi-ta-ctn, .dark .fi-section {
+    border-color: #1e293b !important;
+    background-color: #0f172a !important;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3) !important;
+}
+
 .fi-ta-table thead th {
-    font-size: 0.75rem !important;
+    font-size: 0.72rem !important;
     font-weight: 700 !important;
     text-transform: uppercase !important;
-    letter-spacing: 0.05em !important;
+    letter-spacing: 0.06em !important;
     color: #64748b !important;
     background-color: #f8fafc !important;
     border-bottom: 1px solid #e2e8f0 !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
 }
 
 .dark .fi-ta-table thead th {
     color: #94a3b8 !important;
-    background-color: #0f172a !important;
+    background-color: #0b1120 !important;
     border-bottom: 1px solid #1e293b !important;
 }
 
 .fi-ta-row:hover {
-    background-color: rgba(241, 245, 249, 0.6) !important;
+    background-color: rgba(241, 245, 249, 0.7) !important;
 }
 
 .dark .fi-ta-row:hover {
-    background-color: rgba(30, 41, 59, 0.5) !important;
+    background-color: rgba(30, 41, 59, 0.45) !important;
 }
 
-/* Primary Buttons */
+/* --------------------------------------------------------------------------
+   Buttons & Badges
+   -------------------------------------------------------------------------- */
 .fi-btn-color-primary {
     background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%) !important;
-    box-shadow: 0 2px 4px rgba(30, 58, 138, 0.25) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    transition: all 0.15s ease !important;
+    box-shadow: 0 2px 6px rgba(30, 58, 138, 0.25) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    font-weight: 600 !important;
+    transition: all 0.18s ease !important;
 }
 
 .fi-btn-color-primary:hover {
     background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%) !important;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35) !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
 }
 
-/* Badges */
 .fi-badge {
     font-weight: 700 !important;
     letter-spacing: 0.02em !important;
     border-radius: 9999px !important;
-    padding: 0.2rem 0.6rem !important;
 }
 
-/* Scrollbars */
+/* --------------------------------------------------------------------------
+   Custom Animations & Scrollbars
+   -------------------------------------------------------------------------- */
+@keyframes fasre-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.15); }
+}
+
+.fasre-pulse {
+    animation: fasre-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;

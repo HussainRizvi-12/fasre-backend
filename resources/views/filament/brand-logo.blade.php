@@ -1,20 +1,23 @@
-<div class="flex items-center gap-3 py-1">
-    <div class="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-[#00236f] via-[#1e3a8a] to-[#2546a8] shadow-md shadow-blue-950/20 ring-1 ring-white/20">
-        <svg class="w-6 h-6 text-[#f5c518] drop-shadow-sm" viewBox="0 0 24 24" fill="currentColor">
+<div style="display: flex; align-items: center; gap: 10px; text-decoration: none; padding: 2px 0;">
+    {{-- Academic Crest / Graduation Cap Icon --}}
+    <div style="position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; background: linear-gradient(135deg, #1e3a8a 0%, #00194e 100%); border: 1px solid rgba(245, 197, 24, 0.45); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);">
+        <svg style="width: 22px; height: 22px; color: #f5c518;" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 3L1 9L12 15L21 10.09V17H23V9M5 13.18V17.18L12 21L19 17.18V13.18L12 17L5 13.18Z"/>
         </svg>
-        <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full ring-2 ring-white dark:ring-gray-900 animate-pulse"></span>
+        <span style="position: absolute; bottom: -2px; right: -2px; width: 8px; height: 8px; border-radius: 9999px; background-color: #34d399; border: 2px solid #0a1329;"></span>
     </div>
-    <div class="flex flex-col">
-        <div class="flex items-center gap-1.5">
-            <span class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-gray-900 via-blue-950 to-indigo-900 dark:from-white dark:via-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+
+    {{-- Brand Title & Subtitle --}}
+    <div style="display: flex; flex-direction: column; min-width: 0; line-height: 1.2;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 800; color: #ffffff; letter-spacing: -0.02em;">
                 FASRE
             </span>
-            <span class="px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900 bg-gradient-to-r from-amber-200 to-amber-300 rounded shadow-sm">
-                Portal
+            <span style="background-color: #f5c518; color: #451a03; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; padding: 1.5px 5px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.2);">
+                PORTAL
             </span>
         </div>
-        <span class="text-[10px] font-medium tracking-wide text-gray-500 dark:text-gray-400 -mt-0.5">
+        <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 10.5px; font-weight: 500; color: #94a3b8; margin-top: 2px; white-space: nowrap;">
             Higher Ed Quality Assurance
         </span>
     </div>
