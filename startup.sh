@@ -20,6 +20,11 @@ cd /home/site/wwwroot
 # Create storage symlink
 php artisan storage:link --force 2>/dev/null || true
 
+# Clear stale caches
+echo "==> Clearing stale caches..."
+rm -f /home/site/wwwroot/bootstrap/cache/config.php /home/site/wwwroot/bootstrap/cache/routes*.php /home/site/wwwroot/bootstrap/cache/packages.php /home/site/wwwroot/bootstrap/cache/services.php 2>/dev/null || true
+php artisan optimize:clear 2>/dev/null || true
+
 # Run optimization caches
 echo "==> Caching config, routes, and views..."
 php artisan config:cache 2>/dev/null || true
