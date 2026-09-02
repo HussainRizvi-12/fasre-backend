@@ -354,8 +354,9 @@ class PlatformServicesTest extends TestCase
 
     public function test_sanctum_tokens_have_expiry_configured(): void
     {
+        // Sessions must expire (security): 2 hours in this deployment.
         $this->assertNotNull(config('sanctum.expiration'));
-        $this->assertEquals(60 * 24 * 30, (int) config('sanctum.expiration'));
+        $this->assertEquals(120, (int) config('sanctum.expiration'));
     }
 
     /* ── Audit approval notifies faculty ───────────────────────────── */
