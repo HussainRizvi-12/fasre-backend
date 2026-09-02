@@ -78,7 +78,7 @@ class AdminAuditAssignmentApiTest extends TestCase
     public function test_admin_can_create_audit_assignment(): void
     {
         $faculty = User::where('role', UserRole::Faculty)->get();
-        $freshAuditor = $faculty[2]; // Usman Raza — no active audit in seed data
+        $freshAuditor = $faculty[2]; // Usman Raza â€” no active audit in seed data
 
         $response = $this->withToken($this->adminToken())
             ->postJson('/api/admin/audit-assignments', [
@@ -191,6 +191,78 @@ class AdminAuditAssignmentApiTest extends TestCase
             ->assertUnprocessable();
 
         $this->assertEquals(AuditAssignmentStatus::Assigned, $audit->fresh()->status);
+    }
+
+    public function test_rejected_audit_can_be_resubmitted_by_auditor(): void
+    {
+        // Created ALREADY rejected directly in DB — mixing admin and faculty
+        // HTTP calls in one test leaks the cached Sanctum guard user.
+        $audit = AuditAssignment::create([
+            'auditor_id' => $this->auditor->id,
+            'auditee_id' => $this->auditee->id,
+            'section_id' => $this->section->id,
+            'assigned_by' => $this->admin->id,
+            'status' => AuditAssignmentStatus::Rejected,
+            'answers_json' => ['5' => 4],
+            'admin_remarks' => 'Needs revision.',
+            'submitted_at' => now(),
+            'rejected_at' => now(),
+        ]);
+
+        // Auditor saves a revised draft, then resubmits â€” must be allowed.
+        $token = $this->auditor->createToken('auditor_resubmit')->plainTextToken;
+
+        $questions = \App\Models\Question::where('form_type', \App\Enums\FormType::FacultyAudit)
+            ->where('is_active', true)
+            ->get();
+        $answers = [];
+        foreach ($questions as $q) {
+            $val = match ($q->question_type->value) {
+                'rating' => 4,
+                'yes_no' => true,
+                default => 'Revised observation notes.',
+            };
+            $answers[] = ['question_id' => $q->id, 'value' => $val];
+        }
+
+        $this->withToken($token)
+            ->postJson("/api/faculty/audits/{$audit->id}/save-draft", [
+                'answers' => $answers,
+            ])
+            ->assertOk();
+
+        $this->withToken($token)
+            ->postJson("/api/faculty/audits/{$audit->id}/submit", [
+                'answers' => $answers,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'submitted');
+
+        $fresh = $audit->fresh();
+        $this->assertEquals(AuditAssignmentStatus::Submitted, $fresh->status);
+        $this->assertNull($fresh->rejected_at, 'rejected_at must reset on resubmission');
+    }
+
+    public function test_submitted_audit_cannot_be_resubmitted(): void
+    {
+        $audit = AuditAssignment::create([
+            'auditor_id' => $this->auditor->id,
+            'auditee_id' => $this->auditee->id,
+            'section_id' => $this->section->id,
+            'assigned_by' => $this->admin->id,
+            'status' => AuditAssignmentStatus::Submitted,
+            'submitted_at' => now(),
+        ]);
+
+        $token = $this->auditor->createToken('auditor_resubmit2')->plainTextToken;
+
+        $this->withToken($token)
+            ->postJson("/api/faculty/audits/{$audit->id}/submit", [
+                'answers' => [
+                    ['question_id' => 5, 'value' => 4],
+                ],
+            ])
+            ->assertUnprocessable();
     }
 
     public function test_admin_can_view_single_audit_with_answers(): void

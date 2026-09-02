@@ -56,7 +56,9 @@ class SubmitAuditRequest extends FormRequest
                     return;
                 }
 
-                if (in_array($audit->status, [AuditAssignmentStatus::Submitted, AuditAssignmentStatus::Approved, AuditAssignmentStatus::Rejected], true)) {
+                // Submitted and Approved audits are finalized. A Rejected audit
+                // MUST be resubmittable — that is the whole point of sending it back.
+                if (in_array($audit->status, [AuditAssignmentStatus::Submitted, AuditAssignmentStatus::Approved], true)) {
                     $validator->errors()->add('audit', 'This audit has already been submitted and is finalized.');
                     return;
                 }

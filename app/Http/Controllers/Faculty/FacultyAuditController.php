@@ -210,6 +210,8 @@ class FacultyAuditController extends Controller
             'total_score' => $totalScore,
             'status' => AuditAssignmentStatus::Submitted,
             'submitted_at' => now(),
+            // A (re)submission supersedes any earlier rejection.
+            'rejected_at' => null,
         ]);
 
         ActivityLogger::log($audit, 'audit.submitted', [
