@@ -19,7 +19,16 @@ class AuthController extends Controller
     {
         $user = User::where('email', $request->email)->first();
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! $user) {
+            // Constant-time dummy hash check to prevent email enumeration timing attacks
+            Hash::check($request->password, '$2y$12$eA3VzZ6Xn8bQ9tC2Vw0jJe47dK9a8s7d6f5g4h3j2k1l0m9n8b7v6');
+
+            return response()->json([
+                'message' => 'Invalid email or password.',
+            ], 401);
+        }
+
+        if (! Hash::check($request->password, $user->password)) {
             return response()->json([
                 'message' => 'Invalid email or password.',
             ], 401);

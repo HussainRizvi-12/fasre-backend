@@ -145,5 +145,15 @@ class AuthAndCrossRoleMatrixTest extends TestCase
         ]);
         $res->assertStatus(429);
     }
+
+    public function test_deactivated_user_bearer_token_is_blocked_by_middleware(): void
+    {
+        $this->faculty->update(['is_active' => false]);
+        $token = $this->faculty->createToken('faculty-test-token')->plainTextToken;
+
+        $this->withToken($token)->getJson('/api/faculty/assigned-audits')
+            ->assertStatus(403)
+            ->assertJsonPath('message', 'Your account has been deactivated. Please contact the administrator.');
+    }
 }
 

@@ -39,7 +39,7 @@ flowchart TB
     subgraph AzureCloud["☁️ Microsoft Azure Cloud ($0 / Month Plan)"]
         subgraph AppService["Azure App Service (Linux PHP 8.3)"]
             Nginx["Nginx Reverse Proxy\n(Port 8080 / HTTPS SSL Termination)"]
-            LaravelAPI["Laravel 11 Core API\n- Sanctum Auth\n- Anonymity Engine\n- Audit State Machine\n- Rate Limiting & TrustProxies"]
+            LaravelAPI["Laravel 13 Core API\n- Sanctum Auth\n- Anonymity Engine\n- Audit State Machine\n- Rate Limiting & TrustProxies"]
         end
 
         subgraph Database["Azure Database for PostgreSQL (Flexible Server)"]
@@ -49,7 +49,7 @@ flowchart TB
 
     StudentApp -->|HTTPS / REST API| Nginx
     FacultyApp -->|HTTPS / REST API| Nginx
-    FilamentAdmin -->|HTTPS / Livewire| Nginx
+    ReactAdmin -->|HTTPS / REST API| Nginx
     Nginx --> LaravelAPI
     LaravelAPI -->|PDO / SSL| PGSQL
 ```
@@ -60,10 +60,10 @@ flowchart TB
 
 | Component | Technology | Version | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Backend Framework** | Laravel | `11.x` | Core REST API, business logic, authorization policies, migration pipeline |
-| **Admin Panel** | Filament PHP | `v3.x` | TALL stack (Tailwind, Alpine, Laravel, Livewire) institutional administration |
+| **Backend Framework** | Laravel | `13.x` | Core REST API, business logic, authorization policies, migration pipeline |
+| **Admin Web Portal** | React + Vite | `19.x / 7.x` | Single Page Application (Tailwind CSS, Lucide) institutional administration |
 | **Database** | PostgreSQL | `16.x` | Relational ACID database with SSL encryption and JSONB support |
-| **Authentication** | Laravel Sanctum | `v4.x` | Stateful session authentication (Admin) + API Bearer Tokens (Mobile Apps) |
+| **Authentication** | Laravel Sanctum | `v4.x` | Bearer Token authentication (Admin Portal & Mobile Apps) + Role-based Gating |
 | **Student Mobile App** | Flutter / Dart | `3.27+` / `Dart 3.6+` | Material 3 mobile app for student course evaluations and inbox notifications |
 | **Faculty Mobile App** | Flutter / Dart | `3.27+` / `Dart 3.6+` | Material 3 mobile app for peer audit assignments, rubric grading & reports |
 | **Mobile State Mgmt** | Riverpod | `2.x` | Reactive dependency injection and global authentication/role state handling |
@@ -81,10 +81,13 @@ erDiagram
     USERS ||--o{ STUDENT_ENROLLMENTS : "student_id"
     USERS ||--o{ FACULTY_ASSIGNMENTS : "faculty_id"
     USERS ||--o{ AUDIT_ASSIGNMENTS : "auditor_id / auditee_id"
+    USERS ||--o{ NOTIFICATIONS : "receives"
+    USERS ||--o{ ACTIVITY_LOGS : "triggers"
     DEPARTMENTS ||--o{ COURSES : "has"
     COURSES ||--o{ SECTIONS : "contains"
     SECTIONS ||--o{ STUDENT_ENROLLMENTS : "has"
     SECTIONS ||--o{ FACULTY_ASSIGNMENTS : "teaches"
+    SECTIONS ||--o{ AUDIT_ASSIGNMENTS : "observed_in"
     REVIEW_WINDOWS ||--o{ REVIEW_RESPONSES : "recorded_under"
     REVIEW_WINDOWS ||--o{ REVIEW_PARTICIPATIONS : "tracks"
     QUESTIONS ||--o{ REVIEW_RESPONSES : "evaluated_in"
@@ -133,9 +136,9 @@ erDiagram
         bigint id PK
         string form_type "student_review | faculty_audit"
         string question_text
-        string question_type "rating | yes_no | text"
-        json options
+        string question_type "rating | yes_no | text | textarea"
         int sort_order
+        boolean is_required
         boolean is_active
     }
 
@@ -143,8 +146,9 @@ erDiagram
         bigint id PK
         bigint review_window_id FK
         bigint section_id FK
+        string pseudonym_token
         jsonb answers_json
-        timestamps created_at
+        date submitted_at "Coarse date (no sub-second created_at to protect student anonymity)"
     }
 
     REVIEW_PARTICIPATIONS {
@@ -157,14 +161,37 @@ erDiagram
 
     AUDIT_ASSIGNMENTS {
         bigint id PK
-        bigint review_window_id FK
         bigint auditor_id FK
         bigint auditee_id FK
         bigint section_id FK
-        string status "pending | draft | submitted | approved"
-        jsonb rubric_ratings
-        text comments
+        bigint assigned_by FK
+        string status "assigned | in_progress | submitted | approved | rejected"
         date due_date
+        jsonb answers_json
+        decimal total_score
+        text admin_remarks
+        timestamp submitted_at
+        timestamp approved_at
+        timestamp rejected_at
+    }
+
+    NOTIFICATIONS {
+        bigint id PK
+        bigint user_id FK
+        string type
+        string title
+        text body
+        jsonb data
+        timestamp read_at
+    }
+
+    ACTIVITY_LOGS {
+        bigint id PK
+        bigint user_id FK
+        string action
+        string subject_type
+        bigint subject_id
+        jsonb properties
     }
 ```
 
@@ -258,8 +285,8 @@ sequenceDiagram
 | `GET` | `/api/faculty/assigned-audits` | None | Lists assigned peer audits with status and due dates. |
 | `GET` | `/api/faculty/audits/{id}` | None | Fetches audit details for a specific assignment. |
 | `GET` | `/api/faculty/audit-form` | None | Returns the standardized peer audit rubric criteria. |
-| `POST` | `/api/faculty/audits/{id}/save-draft` | `rubric_ratings`, `comments` | Saves in-progress audit evaluation as draft. |
-| `POST` | `/api/faculty/audits/{id}/submit` | `rubric_ratings`, `comments` | Finalizes and submits the peer evaluation. |
+| `POST` | `/api/faculty/audits/{id}/save-draft` | `answers: [{question_id, value}]` | Saves in-progress audit evaluation as draft. |
+| `POST` | `/api/faculty/audits/{id}/submit` | `answers: [{question_id, value}]` | Finalizes and submits the peer evaluation. |
 | `GET` | `/api/faculty/my-submissions` | None | Returns history of submitted audits conducted by this faculty. |
 | `GET` | `/api/faculty/my-reports` | None | Returns peer evaluation reports received as an auditee. |
 
@@ -354,7 +381,7 @@ All demo accounts share the password: **`Password@123`**
 | :--- | :--- | :--- | :--- | :--- |
 | **System Admin** | System Admin | `admin@fasre.test` | `Password@123` | Log in at `/admin/login`, manage courses, trigger review windows, publish results. |
 | **Student** | Ali Hassan | `ali.hassan@fasre.test` | `Password@123` | Log in to Student App, submit course evaluation for CS101, view published results. |
-| **Student** | Bilal Ahmed | `bilal.ahmed@fasre.test` | `Password@123` | Secondary student account for multi-user review submission tests. |
+| **Student** | Bilal Tariq | `bilal.tariq@fasre.test` | `Password@123` | Secondary student account for multi-user review submission tests. |
 | **Faculty Auditor** | Dr. Usman Raza | `usman.raza@fasre.test` | `Password@123` | Log in to Faculty App, conduct classroom audit for Dr. Ahmed Khan, save draft & submit. |
 | **Faculty Auditee** | Dr. Sara Ali | `sara.ali@fasre.test` | `Password@123` | Log in to Faculty App, view feedback reports received from auditors. |
 | **Dual-Role Faculty** | Dr. Ahmed Khan | `ahmed.khan@fasre.test` | `Password@123` | Demonstrates dual-role switcher (acts as Auditor in one section, Auditee in another). |
@@ -400,12 +427,12 @@ Follow this sequence for the most compelling presentation to project evaluators:
 ### Q1: The web portal / API took 5-10 seconds on the very first request. Why?
 > **Answer**: Azure App Service **F1 Free Tier** places the container into a warm standby state if there are no requests for a few hours. When a new request arrives, it boots the PHP worker in ~5 seconds. Subsequent requests are fast (<200ms). Before giving your presentation, visit `https://fasre-api-srv.azurewebsites.net/up` once to wake up the server.
 
-### Q2: How do I reset or re-seed the cloud database?
-> **Answer**: From your local terminal in `Backend admin panel`:
+### Q2: How do I reset or re-seed the database?
+> **Answer**: For local development / test database reset:
 > ```bash
-> php artisan migrate:fresh --seed --seeder=DemoSeeder --force
+> php artisan migrate:fresh --seed --seeder=DemoSeeder
 > ```
-> *(Because `.env` points to `fasre-postgres-srv.postgres.database.azure.com`, running this resets and seeds the Azure cloud database instantly).*
+> ⚠️ **IMPORTANT CAUTION**: Because `.env` is configured for production Azure (`fasre-postgres-srv.postgres.database.azure.com`), running `migrate:fresh --force` will instantly drop and wipe your live production database! Only run `migrate:fresh` when pointing to a local or disposable test database.
 
 ### Q3: How do I push backend code updates to Azure?
 > **Answer**: Azure is connected to your GitHub repository. Simply commit and push:

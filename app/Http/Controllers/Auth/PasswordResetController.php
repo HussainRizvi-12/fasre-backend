@@ -48,6 +48,9 @@ class PasswordResetController extends Controller
                 $user->forceFill([
                     'password' => Hash::make($password),
                 ])->save();
+
+                // Revoke all existing tokens to prevent stolen tokens from surviving a password reset
+                $user->tokens()->delete();
             },
         );
 

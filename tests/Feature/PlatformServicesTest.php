@@ -233,6 +233,10 @@ class PlatformServicesTest extends TestCase
 
     public function test_password_reset_flow_completes(): void
     {
+        // Pre-create token
+        $this->faculty->createToken('pre-reset-token');
+        $this->assertCount(1, $this->faculty->tokens);
+
         $token = Password::createToken($this->faculty);
 
         $this->postJson('/api/reset-password', [
@@ -242,6 +246,9 @@ class PlatformServicesTest extends TestCase
         ])->assertOk();
 
         $this->faculty->refresh();
+
+        // Pre-reset token must be deleted
+        $this->assertCount(0, $this->faculty->tokens);
 
         // Old password no longer valid; new one authenticates via login endpoint
         $this->postJson('/api/login', [
