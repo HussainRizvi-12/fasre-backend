@@ -321,8 +321,8 @@ The system is hosted on **Microsoft Azure** using benefits provided by the **Git
 - **SSL / HTTPS Termination**: Automated through Azure Edge SSL (`*.azurewebsites.net`).
 
 ### ⚙️ Production Web App Configuration
-- **Live URL**: `https://fasre-api-srv.azurewebsites.net`
-- **Admin Panel**: `https://fasre-api-srv.azurewebsites.net/admin`
+- **Live URL**: *(share privately — do not publish in this public repository; see the credentials note in Section 9)*
+- **Admin Panel**: `<LIVE_URL>/admin`
 - **Nginx Configuration**: Custom server block configured in `default` routing requests to `/home/site/wwwroot/public` with PHP-FPM socket handler.
 - **HTTPS Enforcement**: `AppServiceProvider::boot()` forces `URL::forceScheme('https')` and `bootstrap/app.php` trusts Azure reverse proxies via `$middleware->trustProxies(at: '*')`.
 - **Startup Command**:
@@ -341,7 +341,7 @@ Both mobile apps are built with Flutter and configured to automatically connect 
 - **Directory**: `c:\Users\Hussain\Desktop\New FYP\Student Review App`
 - **Compiled APK**: [`APKs/Student_Review_App.apk`](file:///c:/Users/Hussain/Desktop/New%20FYP/APKs/Student_Review_App.apk)
 - **Key Features**:
-  - Auto-connecting live session store (`defaultBaseUrl = 'https://fasre-api-srv.azurewebsites.net'`).
+  - Auto-connecting live session store (default base URL set to the production API, overridable at runtime from the login screen).
   - Active review cycle banner & remaining days countdown.
   - Course card status badges (`Not Started`, `Submitted`).
   - Multi-step survey interface (5-star ratings, Likert scale, comments).
@@ -375,6 +375,8 @@ copy build\app\outputs\flutter-apk\app-release.apk "..\APKs\Faculty_Audit_App.ap
 
 ## 🔑 9. Demo Accounts & Testing Cheat Sheet
 
+> ⚠️ **CONFIDENTIAL — DEMO USE ONLY**: These credentials are for the demo dataset only. Do not use them on a production database, and do not publish this document together with the live deployment URL. Share the URL and this section privately with evaluators.
+
 All demo accounts share the password: **`Password@123`**
 
 | Role | Name | Email | Password | Primary Demo Responsibilities |
@@ -393,7 +395,7 @@ All demo accounts share the password: **`Password@123`**
 Follow this sequence for the most compelling presentation to project evaluators:
 
 ### Step 1: Institutional Admin Overview (Web Browser)
-1. Open **[https://fasre-api-srv.azurewebsites.net/admin](https://fasre-api-srv.azurewebsites.net/admin)**.
+1. Open the **admin panel** at `<LIVE_URL>/admin` (URL shared privately).
 2. Log in as `admin@fasre.test` / `Password@123`.
 3. Showcase the **Dashboard**, **Courses**, **Faculty Assignments**, and **Review Windows**.
 4. Show that the **Fall 2026 Student Reviews** window is currently in the **Active** state.
@@ -425,14 +427,14 @@ Follow this sequence for the most compelling presentation to project evaluators:
 ## 🛡️ 11. Maintenance, Database Seeding & Troubleshooting FAQ
 
 ### Q1: The web portal / API took 5-10 seconds on the very first request. Why?
-> **Answer**: Azure App Service **F1 Free Tier** places the container into a warm standby state if there are no requests for a few hours. When a new request arrives, it boots the PHP worker in ~5 seconds. Subsequent requests are fast (<200ms). Before giving your presentation, visit `https://fasre-api-srv.azurewebsites.net/up` once to wake up the server.
+> **Answer**: Azure App Service **F1 Free Tier** places the container into a warm standby state if there are no requests for a few hours. When a new request arrives, it boots the PHP worker in ~5 seconds. Subsequent requests are fast (<200ms). Before giving your presentation, visit `<LIVE_URL>/up` once to wake up the server.
 
 ### Q2: How do I reset or re-seed the database?
 > **Answer**: For local development / test database reset:
 > ```bash
 > php artisan migrate:fresh --seed --seeder=DemoSeeder
 > ```
-> ⚠️ **IMPORTANT CAUTION**: Because `.env` is configured for production Azure (`fasre-postgres-srv.postgres.database.azure.com`), running `migrate:fresh --force` will instantly drop and wipe your live production database! Only run `migrate:fresh` when pointing to a local or disposable test database.
+> ⚠️ **ENVIRONMENT SAFETY**: The repository's `.env` is configured for **local** SQLite (`database/database.sqlite`) and is safe to re-seed. Production Azure credentials live only in `.env.production` (gitignored) and on the Azure App Service itself — never point local commands at the production database, and never run `migrate:fresh` against it.
 
 ### Q3: How do I push backend code updates to Azure?
 > **Answer**: Azure is connected to your GitHub repository. Simply commit and push:

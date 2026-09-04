@@ -6,38 +6,34 @@
 
 ## 🏗️ Technology Architecture
 
-- **Backend:** Laravel 11.x, PHP 8.2+, PostgreSQL 18
-- **Authentication:** Laravel Sanctum (Token Auth for Mobile Apps + Session Auth for Web Admin Portal)
-- **Web Admin Portal:** Custom Stitch Blade Portal (`#1E3A8A` Navy / Gold accents)
-- **Mobile Apps:** Flutter / Dart (Data-layer wired to REST APIs with 100% visual preservation)
+- **Backend:** Laravel (PHP 8.3+), PostgreSQL (production on Azure) / SQLite (local development)
+- **Authentication:** Laravel Sanctum (Token Auth for Mobile Apps + Token Auth for Web Admin Portal)
+- **Web Admin Portal:** React SPA served by the backend at `/admin`
+- **Mobile Apps:** Flutter / Dart (Data-layer wired to REST APIs)
 
 ---
 
 ## 🚀 Backend Environment Setup
 
 ### 1. Requirements
-- PHP 8.2 or higher (with `pdo_pgsql`, `pgsql`, `mbstring`, `openssl`, `curl` extensions enabled)
+- PHP 8.3 or higher (with `pdo_sqlite`, `mbstring`, `openssl`, `curl` extensions enabled)
 - Composer 2.x
-- PostgreSQL 18 (Running on Port `5433` by default)
+- No database server needed for local development (SQLite is used out of the box)
 
 ### 2. Configure Environment (`.env`)
-Create or verify `.env` in `Backend admin panel/`:
+The repository's `.env` points at the local SQLite database (`database/database.sqlite`). Production Azure credentials are kept separately in `.env.production` (gitignored) — never put them in `.env` locally:
 ```env
-APP_NAME="FASRE Backend"
+APP_NAME="FASRE"
 APP_ENV=local
-APP_KEY=base64:7V61Ue7s0vM39T3aK2j1QzW4xY5e9r2p1l0m3n4o5p6=
+APP_KEY=<php artisan key:generate>
 APP_DEBUG=true
 APP_URL=http://127.0.0.1:8000
 
-DB_CONNECTION=pgsql
-DB_HOST=127.0.0.1
-DB_PORT=5433
-DB_DATABASE=fasre
-DB_USERNAME=postgres
-DB_PASSWORD=
+DB_CONNECTION=sqlite
+DB_DATABASE=database/database.sqlite
 
-SESSION_DRIVER=database
-SANCTUM_STATEFUL_DOMAINS=127.0.0.1,localhost
+SESSION_DRIVER=file
+SANCTUM_TOKEN_EXPIRATION=120
 ```
 
 ### 3. Install Dependencies & Setup Database
@@ -77,6 +73,8 @@ php artisan test
 
 ## 🔑 Demo Credentials (Password: `Password@123`)
 
+> ⚠️ **Demo use only.** These accounts exist only in the demo-seeded dataset. Never seed them into a production database, and never publish the live deployment URL together with this README.
+
 | Role | Email | Use Case |
 | :--- | :--- | :--- |
 | **Admin** | `admin@fasre.test` | Web Admin Portal (`/login`) |
@@ -85,4 +83,4 @@ php artisan test
 | **Faculty (Auditor)** | `usman.raza@fasre.test` | Faculty Audit App |
 | **Student** | `ali.hassan@fasre.test` | Student Review App |
 
-For a complete walkthrough script with step-by-step instructions, see [DEMO_SCRIPT.md](file:///c:/Users/Hussain/Desktop/New%20FYP/Backend%20admin%20panel/DEMO_SCRIPT.md).
+For a complete walkthrough script with step-by-step instructions, see **Section 10** of [FASRE_MASTER_DOCUMENTATION.md](FASRE_MASTER_DOCUMENTATION.md).
