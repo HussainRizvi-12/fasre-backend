@@ -10,6 +10,7 @@ use App\Services\ActivityLogger;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class AuditAssignmentController extends Controller
@@ -94,24 +95,35 @@ class AuditAssignmentController extends Controller
      */
     public function approve(Request $request, int $id): JsonResponse
     {
-        $assignment = AuditAssignment::findOrFail($id);
+        // Lock the row and re-check status inside the transaction: a
+        // concurrent faculty save-draft/submit (or a second admin decision)
+        // must not interleave between the status check and the write.
+        $assignment = DB::transaction(function () use ($request, $id) {
+            $assignment = AuditAssignment::whereKey($id)->lockForUpdate()->first();
 
-        if ($assignment->status !== AuditAssignmentStatus::Submitted) {
-            throw ValidationException::withMessages([
-                'status' => "Cannot approve: audit must be in 'submitted' status. Current status: {$assignment->status->value}.",
+            if (! $assignment) {
+                abort(404, 'Audit assignment not found.');
+            }
+
+            if ($assignment->status !== AuditAssignmentStatus::Submitted) {
+                throw ValidationException::withMessages([
+                    'status' => "Cannot approve: audit must be in 'submitted' status. Current status: {$assignment->status->value}.",
+                ]);
+            }
+
+            $assignment->update([
+                'status' => AuditAssignmentStatus::Approved,
+                'admin_remarks' => $request->input('admin_remarks', $assignment->admin_remarks),
+                'approved_at' => now(),
             ]);
-        }
 
-        $assignment->update([
-            'status' => AuditAssignmentStatus::Approved,
-            'admin_remarks' => $request->input('admin_remarks', $assignment->admin_remarks),
-            'approved_at' => now(),
-        ]);
+            ActivityLogger::log($assignment, 'audit_assignment.approved', [
+                'auditee' => $assignment->auditee?->name,
+                'score' => $assignment->total_score,
+            ]);
 
-        ActivityLogger::log($assignment, 'audit_assignment.approved', [
-            'auditee' => $assignment->auditee?->name,
-            'score' => $assignment->total_score,
-        ]);
+            return $assignment;
+        });
 
         NotificationService::send(
             $assignment->auditee,
@@ -140,28 +152,36 @@ class AuditAssignmentController extends Controller
      */
     public function reject(Request $request, int $id): JsonResponse
     {
-        $assignment = AuditAssignment::findOrFail($id);
-
-        if ($assignment->status !== AuditAssignmentStatus::Submitted) {
-            throw ValidationException::withMessages([
-                'status' => "Cannot reject: audit must be in 'submitted' status. Current status: {$assignment->status->value}.",
-            ]);
-        }
-
         $request->validate([
             'admin_remarks' => ['required', 'string'],
         ]);
 
-        $assignment->update([
-            'status' => AuditAssignmentStatus::Rejected,
-            'admin_remarks' => $request->input('admin_remarks'),
-            'rejected_at' => now(),
-        ]);
+        $assignment = DB::transaction(function () use ($request, $id) {
+            $assignment = AuditAssignment::whereKey($id)->lockForUpdate()->first();
 
-        ActivityLogger::log($assignment, 'audit_assignment.rejected', [
-            'auditor' => $assignment->auditor?->name,
-            'remarks' => $request->input('admin_remarks'),
-        ]);
+            if (! $assignment) {
+                abort(404, 'Audit assignment not found.');
+            }
+
+            if ($assignment->status !== AuditAssignmentStatus::Submitted) {
+                throw ValidationException::withMessages([
+                    'status' => "Cannot reject: audit must be in 'submitted' status. Current status: {$assignment->status->value}.",
+                ]);
+            }
+
+            $assignment->update([
+                'status' => AuditAssignmentStatus::Rejected,
+                'admin_remarks' => $request->input('admin_remarks'),
+                'rejected_at' => now(),
+            ]);
+
+            ActivityLogger::log($assignment, 'audit_assignment.rejected', [
+                'auditor' => $assignment->auditor?->name,
+                'remarks' => $request->input('admin_remarks'),
+            ]);
+
+            return $assignment;
+        });
 
         NotificationService::send(
             $assignment->auditor,

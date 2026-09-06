@@ -135,7 +135,7 @@ class BulkImportController extends Controller
                 User::create([
                     'name' => $name,
                     'email' => $email,
-                    'password' => ($row['password'] ?? '') !== '' ? $row['password'] : 'Password@123',
+                    'password' => ($row['password'] ?? '') !== '' ? $row['password'] : env('FASRE_DEMO_PASSWORD', 'Password@123'),
                     'role' => $role,
                     'is_active' => ! in_array(strtolower($row['is_active'] ?? ''), ['0', 'false', 'no'], true),
                 ]);

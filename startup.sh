@@ -17,8 +17,18 @@ chmod -R 775 /home/site/wwwroot/storage /home/site/wwwroot/bootstrap/cache 2>/de
 
 cd /home/site/wwwroot
 
+# Ensure .env is initialized from .env.production if missing
+if [ ! -f /home/site/wwwroot/.env ] && [ -f /home/site/wwwroot/.env.production ]; then
+    echo "==> Initializing production .env from sanitized .env.production template..."
+    cp /home/site/wwwroot/.env.production /home/site/wwwroot/.env
+fi
+
 # Create storage symlink
 php artisan storage:link --force 2>/dev/null || true
+
+# Run database migrations
+echo "==> Running database migrations..."
+php artisan migrate --force || true
 
 # Clear stale caches
 echo "==> Clearing stale caches..."

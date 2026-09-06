@@ -32,7 +32,7 @@ class DemoSeeder extends Seeder
      */
     public function run(): void
     {
-        $password = 'Password@123';
+        $password = env('FASRE_DEMO_PASSWORD', 'Password@123');
 
         // ── 1. Users ────────────────────────────────────────────────
         $admin = User::create([

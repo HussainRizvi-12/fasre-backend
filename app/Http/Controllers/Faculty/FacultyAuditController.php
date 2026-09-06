@@ -16,9 +16,32 @@ use App\Services\ActivityLogger;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class FacultyAuditController extends Controller
 {
+    /**
+     * Normalizes the incoming answers array into qId-keyed maps for
+     * answers_json and comments_json.
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, string>}
+     */
+    private function normalizeAnswers(array $submittedAnswers): array
+    {
+        $formattedAnswers = [];
+        $formattedComments = [];
+        foreach ($submittedAnswers as $answer) {
+            $formattedAnswers[(string) $answer['question_id']] = $answer['value'];
+            $comment = $answer['comment'] ?? null;
+            if (is_string($comment) && trim($comment) !== '') {
+                $formattedComments[(string) $answer['question_id']] = trim($comment);
+            }
+        }
+
+        return [$formattedAnswers, $formattedComments];
+    }
+
     /**
      * GET /api/faculty/assigned-audits
      * Returns audits assigned to the authenticated faculty member as auditor.
@@ -104,6 +127,7 @@ class FacultyAuditController extends Controller
                 'total_score' => $audit->total_score,
                 'admin_remarks' => $audit->admin_remarks,
                 'answers_json' => $audit->answers_json,
+                'comments_json' => $audit->comments_json,
                 'submitted_at' => $audit->submitted_at?->toIso8601String(),
                 'approved_at' => $audit->approved_at?->toIso8601String(),
             ],
@@ -132,22 +156,31 @@ class FacultyAuditController extends Controller
      */
     public function saveDraft(SaveAuditDraftRequest $request, int $id): JsonResponse
     {
-        $audit = AuditAssignment::findOrFail($id);
+        [$formattedAnswers, $formattedComments] = $this->normalizeAnswers($request->input('answers', []));
 
-        if ($audit->auditor_id !== $request->user()->id) {
-            return response()->json(['message' => 'Forbidden. You are not the assigned auditor.'], 403);
-        }
+        // Lock the row inside a transaction so a concurrent submit/approve
+        // cannot interleave between the status check and the write (TOCTOU).
+        $audit = DB::transaction(function () use ($id, $formattedAnswers, $formattedComments) {
+            $audit = AuditAssignment::whereKey($id)->lockForUpdate()->first();
 
-        $submittedAnswers = $request->input('answers', []);
-        $formattedAnswers = [];
-        foreach ($submittedAnswers as $answer) {
-            $formattedAnswers[(string) $answer['question_id']] = $answer['value'];
-        }
+            if (! $audit) {
+                abort(404, 'Audit assignment not found.');
+            }
 
-        $audit->update([
-            'answers_json' => $formattedAnswers,
-            'status' => AuditAssignmentStatus::InProgress,
-        ]);
+            if (in_array($audit->status, [AuditAssignmentStatus::Submitted, AuditAssignmentStatus::Approved], true)) {
+                throw ValidationException::withMessages([
+                    'audit' => 'Cannot save draft. This audit has already been submitted and is finalized.',
+                ]);
+            }
+
+            $audit->update([
+                'answers_json' => $formattedAnswers,
+                'comments_json' => $formattedComments,
+                'status' => AuditAssignmentStatus::InProgress,
+            ]);
+
+            return $audit;
+        });
 
         return response()->json([
             'message' => 'Audit draft saved successfully.',
@@ -155,6 +188,7 @@ class FacultyAuditController extends Controller
                 'id' => $audit->id,
                 'status' => $audit->status->value,
                 'answers_json' => $audit->answers_json,
+                'comments_json' => $audit->comments_json,
             ],
         ]);
     }
@@ -165,17 +199,7 @@ class FacultyAuditController extends Controller
      */
     public function submit(SubmitAuditRequest $request, int $id): JsonResponse
     {
-        $audit = AuditAssignment::findOrFail($id);
-
-        if ($audit->auditor_id !== $request->user()->id) {
-            return response()->json(['message' => 'Forbidden. You are not the assigned auditor.'], 403);
-        }
-
-        $submittedAnswers = $request->input('answers', []);
-        $formattedAnswers = [];
-        foreach ($submittedAnswers as $answer) {
-            $formattedAnswers[(string) $answer['question_id']] = $answer['value'];
-        }
+        [$formattedAnswers, $formattedComments] = $this->normalizeAnswers($request->input('answers', []));
 
         // Compute total_score = (average of all scorable [rating + yes_no]) * 20
         $activeQuestions = Question::where('form_type', FormType::FacultyAudit)
@@ -205,22 +229,44 @@ class FacultyAuditController extends Controller
             $totalScore = round($average * 20, 2); // Scales 0-5 to 0-100
         }
 
-        $audit->update([
-            'answers_json' => $formattedAnswers,
-            'total_score' => $totalScore,
-            'status' => AuditAssignmentStatus::Submitted,
-            'submitted_at' => now(),
-            // A (re)submission supersedes any earlier rejection.
-            'rejected_at' => null,
-        ]);
+        // Lock the row and re-check finality inside the transaction: a draft
+        // being saved concurrently, or an admin approving concurrently, can
+        // never interleave with this submission (prevents an approved audit
+        // from being overwritten back to submitted/in_progress).
+        $audit = DB::transaction(function () use ($id, $formattedAnswers, $formattedComments, $totalScore) {
+            $audit = AuditAssignment::whereKey($id)->lockForUpdate()->first();
 
-        ActivityLogger::log($audit, 'audit.submitted', [
-            'auditor' => $audit->auditor?->name,
-            'auditee' => $audit->auditee?->name,
-            'score' => $totalScore,
-        ]);
+            if (! $audit) {
+                abort(404, 'Audit assignment not found.');
+            }
 
-        // Notify all admins that an audit awaits their decision.
+            if (in_array($audit->status, [AuditAssignmentStatus::Submitted, AuditAssignmentStatus::Approved], true)) {
+                throw ValidationException::withMessages([
+                    'audit' => 'This audit has already been submitted and is finalized.',
+                ]);
+            }
+
+            $audit->update([
+                'answers_json' => $formattedAnswers,
+                'comments_json' => $formattedComments,
+                'total_score' => $totalScore,
+                'status' => AuditAssignmentStatus::Submitted,
+                'submitted_at' => now(),
+                // A (re)submission supersedes any earlier rejection.
+                'rejected_at' => null,
+            ]);
+
+            ActivityLogger::log($audit, 'audit.submitted', [
+                'auditor' => $audit->auditor?->name,
+                'auditee' => $audit->auditee?->name,
+                'score' => $totalScore,
+            ]);
+
+            return $audit;
+        });
+
+        // Notifications fire after commit — they must never roll back with
+        // the transaction, and never notify about an uncommitted state.
         NotificationService::sendMany(
             User::where('role', UserRole::Admin)->where('is_active', true)->get(),
             'audit',

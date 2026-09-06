@@ -24,9 +24,20 @@ class SubmitStudentReviewRequest extends FormRequest
         return [
             'review_window_id' => ['required', 'integer', 'exists:review_windows,id'],
             'section_id' => ['required', 'integer', 'exists:sections,id'],
-            'answers' => ['required', 'array', 'min:1'],
+            'answers' => ['required', 'array', 'min:1', 'max:100'],
             'answers.*.question_id' => ['required', 'integer', 'exists:questions,id'],
-            'answers.*.value' => ['nullable'],
+            // Scalar-only + bounded length: blocks multi-megabyte strings,
+            // nested arrays/objects, and other junk payloads from bloating
+            // the answers_json column (aggregation hydrates these rows).
+            'answers.*.value' => ['nullable', function (string $attribute, mixed $value, \Closure $fail) {
+                if (is_array($value) || is_object($value)) {
+                    $fail('Answer values must be plain text, numbers, or booleans.');
+                    return;
+                }
+                if (is_string($value) && strlen($value) > 5000) {
+                    $fail('Each text answer may not exceed 5000 characters.');
+                }
+            }],
         ];
     }
 

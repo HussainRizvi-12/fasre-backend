@@ -15,6 +15,7 @@ use App\Http\Controllers\Admin\StudentEnrollmentController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\Faculty\AuditEvidenceController;
 use App\Http\Controllers\Faculty\FacultyAuditController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Student\StudentReviewController;
@@ -124,10 +125,16 @@ $registerApiRoutes = function () {
             Route::get('/audit-form', [FacultyAuditController::class, 'auditForm']);
             Route::post('/audits/{id}/save-draft', [FacultyAuditController::class, 'saveDraft']);
             Route::post('/audits/{id}/submit', [FacultyAuditController::class, 'submit']);
+            Route::post('/audits/{id}/evidence', [AuditEvidenceController::class, 'upload']);
+            Route::get('/audits/{id}/evidence', [AuditEvidenceController::class, 'index']);
+            Route::get('/evidence/{fileId}/download', [AuditEvidenceController::class, 'download']);
             Route::get('/my-submissions', [FacultyAuditController::class, 'mySubmissions']);
             Route::get('/my-reports', [FacultyAuditController::class, 'myReports']);
         });
 };
 
+// Single canonical surface (/api/*). The previous /api/v1 mirror doubled
+// the attack surface and split per-route throttling budgets in half
+// (20 login attempts/min instead of 10). Clients all target /api/*;
+// versioning, if ever needed, belongs behind a versioned Accept header.
 $registerApiRoutes();
-Route::prefix('v1')->group($registerApiRoutes);

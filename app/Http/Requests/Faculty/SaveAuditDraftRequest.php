@@ -31,9 +31,18 @@ class SaveAuditDraftRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'answers' => ['nullable', 'array'],
+            'answers' => ['nullable', 'array', 'max:100'],
             'answers.*.question_id' => ['required_with:answers', 'integer', 'exists:questions,id'],
-            'answers.*.value' => ['nullable'],
+            // Scalar-only + bounded length (see SubmitStudentReviewRequest).
+            'answers.*.value' => ['nullable', function (string $attribute, mixed $value, \Closure $fail) {
+                if (is_array($value) || is_object($value)) {
+                    $fail('Answer values must be plain text, numbers, or booleans.');
+                    return;
+                }
+                if (is_string($value) && strlen($value) > 5000) {
+                    $fail('Each text answer may not exceed 5000 characters.');
+                }
+            }],
         ];
     }
 

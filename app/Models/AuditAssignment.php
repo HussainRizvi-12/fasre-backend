@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\AuditAssignmentStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * NOTE: auditor_id must NOT equal auditee_id.
@@ -22,6 +23,7 @@ class AuditAssignment extends Model
         'status',
         'due_date',
         'answers_json',
+        'comments_json',
         'total_score',
         'admin_remarks',
         'submitted_at',
@@ -35,6 +37,7 @@ class AuditAssignment extends Model
             'status' => AuditAssignmentStatus::class,
             'due_date' => 'date',
             'answers_json' => 'array',
+            'comments_json' => 'array',
             'total_score' => 'decimal:2',
             'submitted_at' => 'datetime',
             'approved_at' => 'datetime',
@@ -60,5 +63,10 @@ class AuditAssignment extends Model
     public function assignedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    public function evidenceFiles(): HasMany
+    {
+        return $this->hasMany(AuditEvidenceFile::class);
     }
 }

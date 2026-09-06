@@ -331,6 +331,30 @@ The system is hosted on **Microsoft Azure** using benefits provided by the **Git
   ```
 - **Continuous Deployment**: Connected directly to GitHub repository: `https://github.com/HussainRizvi-12/fasre-backend.git` (Branch: `main`).
 
+### 🔐 Required Azure App Settings (Environment Variables)
+
+To prevent plaintext secrets from existing in the deployment artifact or git repository, all sensitive credentials must be set in **Azure Portal → App Services → [Your App] → Configuration / Environment Variables**. The runtime artifact (`.env.production`) only provides non-sensitive defaults (`APP_ENV=production`, `APP_DEBUG=false`, `LOG_LEVEL=error`).
+
+| Variable Name | Category | Description |
+| :--- | :--- | :--- |
+| `APP_KEY` | Security / Core | Laravel 32-character encryption key (`base64:...`) |
+| `DB_CONNECTION` | Database | Database driver (`pgsql`) |
+| `DB_HOST` | Database | Fully qualified Azure PostgreSQL server hostname |
+| `DB_PORT` | Database | PostgreSQL port (`5432`) |
+| `DB_DATABASE` | Database | Production database name |
+| `DB_USERNAME` | Database | PostgreSQL server admin login |
+| `DB_PASSWORD` | Database | PostgreSQL server admin password (Secret) |
+| `DB_SSLMODE` | Database | Enforces encrypted SSL database connection (`require`) |
+| `FASRE_DEMO_PASSWORD` | Security | Strong default password for demo seeders & bulk imports |
+| `MAIL_MAILER` | Mail | Mail driver (`smtp` or `log`) |
+| `MAIL_HOST` | Mail | Outbound SMTP relay server hostname |
+| `MAIL_PORT` | Mail | Outbound SMTP port (`587`) |
+| `MAIL_USERNAME` | Mail | SMTP authentication username |
+| `MAIL_PASSWORD` | Mail | SMTP authentication password (Secret) |
+| `MAIL_ENCRYPTION` | Mail | SMTP encryption transport (`tls`) |
+| `MAIL_FROM_ADDRESS` | Mail | System notification sender address |
+| `MAIL_FROM_NAME` | Mail | Sender display name |
+
 ---
 
 ## 📱 8. Mobile Applications & Build Guide
@@ -377,16 +401,16 @@ copy build\app\outputs\flutter-apk\app-release.apk "..\APKs\Faculty_Audit_App.ap
 
 > ⚠️ **CONFIDENTIAL — DEMO USE ONLY**: These credentials are for the demo dataset only. Do not use them on a production database, and do not publish this document together with the live deployment URL. Share the URL and this section privately with evaluators.
 
-All demo accounts share the password: **`Password@123`**
+All demo accounts share the password: **`redacted - stored in your secrets manager`**
 
 | Role | Name | Email | Password | Primary Demo Responsibilities |
 | :--- | :--- | :--- | :--- | :--- |
-| **System Admin** | System Admin | `admin@fasre.test` | `Password@123` | Log in at `/admin/login`, manage courses, trigger review windows, publish results. |
-| **Student** | Ali Hassan | `ali.hassan@fasre.test` | `Password@123` | Log in to Student App, submit course evaluation for CS101, view published results. |
-| **Student** | Bilal Tariq | `bilal.tariq@fasre.test` | `Password@123` | Secondary student account for multi-user review submission tests. |
-| **Faculty Auditor** | Dr. Usman Raza | `usman.raza@fasre.test` | `Password@123` | Log in to Faculty App, conduct classroom audit for Dr. Ahmed Khan, save draft & submit. |
-| **Faculty Auditee** | Dr. Sara Ali | `sara.ali@fasre.test` | `Password@123` | Log in to Faculty App, view feedback reports received from auditors. |
-| **Dual-Role Faculty** | Dr. Ahmed Khan | `ahmed.khan@fasre.test` | `Password@123` | Demonstrates dual-role switcher (acts as Auditor in one section, Auditee in another). |
+| **System Admin** | System Admin | `admin@fasre.test` | `redacted - stored in your secrets manager` | Log in at `/admin/login`, manage courses, trigger review windows, publish results. |
+| **Student** | Ali Hassan | `ali.hassan@fasre.test` | `redacted - stored in your secrets manager` | Log in to Student App, submit course evaluation for CS101, view published results. |
+| **Student** | Bilal Tariq | `bilal.tariq@fasre.test` | `redacted - stored in your secrets manager` | Secondary student account for multi-user review submission tests. |
+| **Faculty Auditor** | Dr. Usman Raza | `usman.raza@fasre.test` | `redacted - stored in your secrets manager` | Log in to Faculty App, conduct classroom audit for Dr. Ahmed Khan, save draft & submit. |
+| **Faculty Auditee** | Dr. Sara Ali | `sara.ali@fasre.test` | `redacted - stored in your secrets manager` | Log in to Faculty App, view feedback reports received from auditors. |
+| **Dual-Role Faculty** | Dr. Ahmed Khan | `ahmed.khan@fasre.test` | `redacted - stored in your secrets manager` | Demonstrates dual-role switcher (acts as Auditor in one section, Auditee in another). |
 
 ---
 
@@ -396,13 +420,13 @@ Follow this sequence for the most compelling presentation to project evaluators:
 
 ### Step 1: Institutional Admin Overview (Web Browser)
 1. Open the **admin panel** at `<LIVE_URL>/admin` (URL shared privately).
-2. Log in as `admin@fasre.test` / `Password@123`.
+2. Log in as `admin@fasre.test` / `redacted - stored in your secrets manager`.
 3. Showcase the **Dashboard**, **Courses**, **Faculty Assignments**, and **Review Windows**.
 4. Show that the **Fall 2026 Student Reviews** window is currently in the **Active** state.
 
 ### Step 2: Student Review Submission (Student Mobile App)
 1. Launch `Student_Review_App.apk` on an Android phone (or emulator).
-2. Log in as `ali.hassan@fasre.test` / `Password@123`.
+2. Log in as `ali.hassan@fasre.test` / `redacted - stored in your secrets manager`.
 3. Note how the app automatically connects to Azure cloud with zero server configuration.
 4. Tap on **CS101 - Introduction to Programming** (`Dr. Ahmed Khan`).
 5. Complete the 5-star rubric questions, enter constructive qualitative feedback, and tap **Submit Review**.
@@ -411,7 +435,7 @@ Follow this sequence for the most compelling presentation to project evaluators:
 
 ### Step 3: Faculty Peer Audit & Role Switcher (Faculty Mobile App)
 1. Launch `Faculty_Audit_App.apk` on a second phone or emulator.
-2. Log in as `usman.raza@fasre.test` / `Password@123`.
+2. Log in as `usman.raza@fasre.test` / `redacted - stored in your secrets manager`.
 3. Under **Assigned Audits**, open the audit for **Dr. Ahmed Khan - CS101**.
 4. Grade the 4 teaching criteria (Punctuality, Subject Mastery, Engagement, Pedagogy), save a draft, and submit the audit.
 5. Log in as `ahmed.khan@fasre.test` and demonstrate the **Role Switcher** toggling between Auditor and Auditee views.
