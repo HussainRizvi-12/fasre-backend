@@ -23,11 +23,13 @@ class FacultyAuditController extends Controller
 {
     /**
      * Normalizes the incoming answers array into qId-keyed maps for
-     * answers_json and comments_json.
+     * answers_json and comments_json. The optional top-level
+     * `recommendations` free text (review summary box) is stored under the
+     * reserved `recommendations` key in comments_json.
      *
      * @return array{0: array<string, mixed>, 1: array<string, string>}
      */
-    private function normalizeAnswers(array $submittedAnswers): array
+    private function normalizeAnswers(array $submittedAnswers, ?string $recommendations = null): array
     {
         $formattedAnswers = [];
         $formattedComments = [];
@@ -37,6 +39,10 @@ class FacultyAuditController extends Controller
             if (is_string($comment) && trim($comment) !== '') {
                 $formattedComments[(string) $answer['question_id']] = trim($comment);
             }
+        }
+
+        if (is_string($recommendations) && trim($recommendations) !== '') {
+            $formattedComments['recommendations'] = trim($recommendations);
         }
 
         return [$formattedAnswers, $formattedComments];
@@ -52,6 +58,14 @@ class FacultyAuditController extends Controller
             ->where('auditor_id', $request->user()->id)
             ->orderBy('due_date')
             ->get();
+
+        // Published faculty-audit question ids let clients compute honest
+        // progress ("3 of 12 answered") instead of guessing a denominator.
+        $questionIds = Question::where('form_type', FormType::FacultyAudit)
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->pluck('id')
+            ->all();
 
         return response()->json([
             'data' => $audits->map(fn ($a) => [
@@ -76,6 +90,8 @@ class FacultyAuditController extends Controller
                 'is_overdue' => $a->due_date ? ($a->due_date->endOfDay()->isPast() && ! in_array($a->status, [AuditAssignmentStatus::Submitted, AuditAssignmentStatus::Approved], true)) : false,
                 'due_in_days' => $a->due_date ? (int) now()->startOfDay()->diffInDays($a->due_date->startOfDay(), false) : null,
                 'answers_json' => $a->answers_json,
+                'comments_json' => $a->comments_json,
+                'published_question_ids' => $questionIds,
                 'admin_remarks' => $a->admin_remarks,
                 'total_score' => $a->total_score,
             ]),
@@ -128,6 +144,11 @@ class FacultyAuditController extends Controller
                 'admin_remarks' => $audit->admin_remarks,
                 'answers_json' => $audit->answers_json,
                 'comments_json' => $audit->comments_json,
+                'published_question_ids' => Question::where('form_type', FormType::FacultyAudit)
+                    ->where('is_active', true)
+                    ->orderBy('sort_order')
+                    ->pluck('id')
+                    ->all(),
                 'submitted_at' => $audit->submitted_at?->toIso8601String(),
                 'approved_at' => $audit->approved_at?->toIso8601String(),
             ],
@@ -156,7 +177,10 @@ class FacultyAuditController extends Controller
      */
     public function saveDraft(SaveAuditDraftRequest $request, int $id): JsonResponse
     {
-        [$formattedAnswers, $formattedComments] = $this->normalizeAnswers($request->input('answers', []));
+        [$formattedAnswers, $formattedComments] = $this->normalizeAnswers(
+            $request->input('answers', []),
+            $request->input('recommendations'),
+        );
 
         // Lock the row inside a transaction so a concurrent submit/approve
         // cannot interleave between the status check and the write (TOCTOU).
@@ -199,7 +223,10 @@ class FacultyAuditController extends Controller
      */
     public function submit(SubmitAuditRequest $request, int $id): JsonResponse
     {
-        [$formattedAnswers, $formattedComments] = $this->normalizeAnswers($request->input('answers', []));
+        [$formattedAnswers, $formattedComments] = $this->normalizeAnswers(
+            $request->input('answers', []),
+            $request->input('recommendations'),
+        );
 
         // Compute total_score = (average of all scorable [rating + yes_no]) * 20
         $activeQuestions = Question::where('form_type', FormType::FacultyAudit)

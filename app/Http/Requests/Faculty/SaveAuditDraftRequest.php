@@ -43,6 +43,8 @@ class SaveAuditDraftRequest extends FormRequest
                     $fail('Each text answer may not exceed 5000 characters.');
                 }
             }],
+            // Free-text recommendations from the review summary box.
+            'recommendations' => ['nullable', 'string', 'max:5000'],
         ];
     }
 
