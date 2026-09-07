@@ -89,6 +89,12 @@ $registerApiRoutes = function () {
             Route::post('audit-assignments/{id}/approve', [AuditAssignmentController::class, 'approve']);
             Route::post('audit-assignments/{id}/reject', [AuditAssignmentController::class, 'reject']);
 
+            // Evidence attachments for audits (admin QA review surface).
+            // The controller methods authorize admins explicitly alongside
+            // auditor/auditee access.
+            Route::get('audit-assignments/{id}/evidence', [AuditEvidenceController::class, 'index']);
+            Route::get('audit-evidence/{fileId}/download', [AuditEvidenceController::class, 'download']);
+
             // Bulk CSV import (users, courses, sections, enrollments, faculty assignments)
             Route::post('bulk-import', [BulkImportController::class, 'import']);
 

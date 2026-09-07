@@ -96,38 +96,36 @@ class ExportController extends Controller
             ->orderBy('sort_order')
             ->get();
 
-        return $this->streamCsv("fasre-review-results-{$window->id}.csv", function ($file) use ($window, $questions) {
+        $aggregator = app(\App\Services\ReviewAggregationService::class);
+
+        return $this->streamCsv("fasre-review-results-{$window->id}.csv", function ($file) use ($window, $questions, $aggregator) {
             fputcsv($file, ['course_code', 'course_title', 'section', 'term', 'primary_faculty', 'responses', 'suppressed', 'question', 'question_type', 'average_or_percentage']);
 
             $sections = Section::with(['course', 'facultyAssignments.faculty'])->orderBy('id')->get();
 
             foreach ($sections as $section) {
-                $responses = ReviewResponse::where('review_window_id', $window->id)
-                    ->where('section_id', $section->id)
-                    ->get();
+                $aggregate = $aggregator->aggregateSection((int) $window->id, (int) $section->id, $questions);
 
-                $suppressed = $responses->count() < 5;
                 $primary = $section->facultyAssignments->firstWhere('is_primary', true)?->faculty?->name;
-                $base = [$section->course?->code, $section->course?->title, $section->name, $section->term, $primary, $responses->count(), $suppressed ? 'yes' : 'no'];
+                $base = [$section->course?->code, $section->course?->title, $section->name, $section->term, $primary, $aggregate['response_count'], $aggregate['is_suppressed'] ? 'yes' : 'no'];
 
-                if ($suppressed) {
+                if ($aggregate['is_suppressed']) {
                     fputcsv($file, [...$base, '(suppressed — fewer than 5 responses)', '', '']);
                     continue;
                 }
 
-                foreach ($questions as $q) {
-                    $answers = $responses->pluck("answers_json.{$q->id}")->filter(fn ($v) => ! is_null($v) && $v !== '');
-
-                    if ($q->question_type === QuestionType::Rating) {
-                        $avg = $answers->count() > 0 ? round((float) $answers->avg(), 2) : 0.0;
-                        fputcsv($file, [...$base, $q->question_text, 'rating (1-5)', $avg]);
-                    } elseif ($q->question_type === QuestionType::YesNo) {
-                        $yesCount = $answers->filter(fn ($v) => in_array($v, [true, 1, '1', 'yes', 'true'], true))->count();
-                        $pct = $answers->count() > 0 ? round(($yesCount / $answers->count()) * 100, 2) : 0.0;
-                        fputcsv($file, [...$base, $q->question_text, 'yes/no (% yes)', $pct]);
-                    } else {
-                        fputcsv($file, [...$base, $q->question_text, 'text (comments)', $answers->count()]);
-                    }
+                foreach ($aggregate['questions'] as $q) {
+                    $value = match ($q['type']) {
+                        'rating' => $q['average'],
+                        'yes_no' => $q['percentage_yes'],
+                        default => $q['submission_count'],
+                    };
+                    $typeLabel = match ($q['type']) {
+                        'rating' => 'rating (1-5)',
+                        'yes_no' => 'yes/no (% yes)',
+                        default => 'text (comments)',
+                    };
+                    fputcsv($file, [...$base, $q['question_text'], $typeLabel, $value]);
                 }
             }
         });

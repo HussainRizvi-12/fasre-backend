@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Student;
 
 use App\Enums\FormType;
-use App\Enums\QuestionType;
 use App\Enums\ReviewWindowStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Student\SubmitStudentReviewRequest;
@@ -12,6 +11,7 @@ use App\Models\ReviewParticipation;
 use App\Models\ReviewResponse;
 use App\Models\ReviewWindow;
 use App\Models\StudentEnrollment;
+use App\Services\ReviewAggregationService;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -267,6 +267,7 @@ class StudentReviewController extends Controller
             ->orderBy('sort_order')
             ->get();
 
+        $aggregator = app(ReviewAggregationService::class);
         $data = [];
 
         foreach ($publishedWindows as $window) {
@@ -278,50 +279,7 @@ class StudentReviewController extends Controller
                     continue;
                 }
 
-                $responses = ReviewResponse::where('review_window_id', $window->id)
-                    ->where('section_id', $section->id)
-                    ->get();
-
-                $responseCount = $responses->count();
-                $isSuppressed = $responseCount < 5;
-
-                $primaryFaculty = $section->facultyAssignments->firstWhere('is_primary', true)?->faculty;
-                $questionAggregates = [];
-
-                if (! $isSuppressed) {
-                    foreach ($questions as $q) {
-                        $qId = (string) $q->id;
-                        $answers = $responses->pluck("answers_json.{$qId}")->filter(fn ($v) => ! is_null($v) && $v !== '');
-
-                        if ($q->question_type === QuestionType::Rating) {
-                            $avg = $answers->count() > 0 ? round((float) $answers->avg(), 2) : 0.0;
-                            $questionAggregates[] = [
-                                'question_id' => $q->id,
-                                'question_text' => $q->question_text,
-                                'type' => 'rating',
-                                'average' => $avg,
-                                'response_count' => $answers->count(),
-                            ];
-                        } elseif ($q->question_type === QuestionType::YesNo) {
-                            $yesCount = $answers->filter(fn ($v) => in_array($v, [true, 1, '1', 'yes', 'true'], true))->count();
-                            $yesPct = $answers->count() > 0 ? round(($yesCount / $answers->count()) * 100, 2) : 0.0;
-                            $questionAggregates[] = [
-                                'question_id' => $q->id,
-                                'question_text' => $q->question_text,
-                                'type' => 'yes_no',
-                                'percentage_yes' => $yesPct,
-                                'response_count' => $answers->count(),
-                            ];
-                        } else {
-                            $questionAggregates[] = [
-                                'question_id' => $q->id,
-                                'question_text' => $q->question_text,
-                                'type' => 'text',
-                                'submission_count' => $answers->count(),
-                            ];
-                        }
-                    }
-                }
+                $aggregate = $aggregator->aggregateSection((int) $window->id, (int) $section->id, $questions);
 
                 $sectionsData[] = [
                     'section_id' => $section->id,
@@ -332,11 +290,11 @@ class StudentReviewController extends Controller
                         'code' => $section->course?->code,
                         'title' => $section->course?->title,
                     ],
-                    'primary_faculty_name' => $primaryFaculty?->name,
-                    'response_count' => $responseCount,
-                    'is_suppressed' => $isSuppressed,
-                    'message' => $isSuppressed ? 'Insufficient responses to display results (< 5 responses).' : null,
-                    'questions' => $isSuppressed ? [] : $questionAggregates,
+                    'primary_faculty_name' => $section->facultyAssignments->firstWhere('is_primary', true)?->faculty?->name,
+                    'response_count' => $aggregate['response_count'],
+                    'is_suppressed' => $aggregate['is_suppressed'],
+                    'message' => $aggregate['is_suppressed'] ? 'Insufficient responses to display results (< 5 responses).' : null,
+                    'questions' => $aggregate['questions'],
                 ];
             }
 
