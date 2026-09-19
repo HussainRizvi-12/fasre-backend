@@ -26,15 +26,17 @@ use Illuminate\Support\Facades\Route;
 
 $registerApiRoutes = function () {
     // ── Auth (Public) ───────────────────────────────────────────────
-    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
-    Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+    // Single canonical login route. The former /auth/login duplicate gave
+    // password guessers a second, independent throttle bucket. The named
+    // `login` limiter (AppServiceProvider) keys on the target account, so
+    // spoofing X-Forwarded-For cannot reset the per-email budget.
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
     Route::post('/forgot-password', [PasswordResetController::class, 'forgot'])->middleware('throttle:6,1');
     Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:6,1');
 
     // ── Auth (Protected) ────────────────────────────────────────────
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
-        Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
         // Notifications (in-app + email; per-user feed)

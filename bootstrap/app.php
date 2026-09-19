@@ -13,7 +13,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->trustProxies(at: '*');
+        // Trust ONLY the immediate reverse proxy. On Azure App Service the
+        // app runs behind the in-container nginx in front of php-fpm, whose
+        // REMOTE_ADDR is the one hop genuinely forwarding X-Forwarded-*.
+        // The previous at:'*' trusted every hop, letting any client spoof
+        // X-Forwarded-For and reset rate-limit buckets at will.
+        $middleware->trustProxies(at: 'REMOTE_ADDR');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
