@@ -2,94 +2,212 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\FormType;
 use App\Enums\ReviewWindowStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreReviewWindowRequest;
 use App\Http\Requests\Admin\UpdateReviewWindowRequest;
+use App\Jobs\SendReviewWindowNotificationsJob;
+use App\Models\AuditProvenanceLog;
+use App\Models\FormVersion;
 use App\Models\ReviewWindow;
 use App\Models\User;
 use App\Services\ActivityLogger;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ReviewWindowController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $query = ReviewWindow::with(['department', 'formVersion', 'sections.course']);
+
+        if ($user && $user->isAdmin() && ! $user->isCentralQa()) {
+            $query->where('department_id', $user->department_id);
+        }
+
         return response()->json([
-            'data' => ReviewWindow::orderByDesc('starts_at')->get(),
+            'data' => $query->orderByDesc('starts_at')->get(),
             'message' => 'Review windows retrieved successfully.',
         ]);
     }
 
     public function store(StoreReviewWindowRequest $request): JsonResponse
     {
+        $validated = $request->validated();
+        $sectionIds = $validated['section_ids'] ?? null;
+        unset($validated['section_ids']);
+
+        if (! $request->user()->isCentralQa()) {
+            $validated['department_id'] = $request->user()->department_id;
+        }
+
+        // Default to latest published student review form version if not provided
+        if (empty($validated['form_version_id'])) {
+            $latestVersion = FormVersion::where('form_type', FormType::StudentReview->value)
+                ->where('is_published', true)
+                ->latest()
+                ->first();
+            $validated['form_version_id'] = $latestVersion?->id;
+        }
+
         $reviewWindow = ReviewWindow::create([
-            ...$request->validated(),
+            ...$validated,
             'status' => ReviewWindowStatus::Draft,
         ]);
 
+        if (! empty($sectionIds)) {
+            $reviewWindow->sections()->sync($sectionIds);
+        }
+
+        ActivityLogger::log($reviewWindow, 'review_window.created', ['title' => $reviewWindow->title]);
+        AuditProvenanceLog::record(
+            $reviewWindow,
+            'created',
+            $request->user(),
+            'Review window created in draft status.',
+            null,
+            ['title' => $reviewWindow->title, 'term' => $reviewWindow->term, 'status' => $reviewWindow->status->value]
+        );
+
         return response()->json([
-            'data' => $reviewWindow,
+            'data' => $reviewWindow->fresh(['department', 'formVersion', 'sections']),
             'message' => 'Review window created successfully.',
         ], 201);
     }
 
+    public function show(Request $request, ReviewWindow $reviewWindow): JsonResponse
+    {
+        if (! $request->user()->canAccessDepartment($reviewWindow->department_id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
+        }
+
+        return response()->json([
+            'data' => $reviewWindow->load(['department', 'formVersion', 'sections.course', 'rosterEntries']),
+            'message' => 'Review window retrieved successfully.',
+        ]);
+    }
+
     public function update(UpdateReviewWindowRequest $request, ReviewWindow $reviewWindow): JsonResponse
     {
-        // Only allow editing while in draft status
+        if (! $request->user()->canAccessDepartment($reviewWindow->department_id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
+        }
+
         if ($reviewWindow->status !== ReviewWindowStatus::Draft) {
             return response()->json([
                 'message' => 'Review window can only be edited while in draft status. Current status: ' . $reviewWindow->status->value,
             ], 422);
         }
 
-        $reviewWindow->update($request->validated());
+        $validated = $request->validated();
+        $sectionIds = $validated['section_ids'] ?? null;
+        unset($validated['section_ids']);
+
+        $beforeState = [
+            'title' => $reviewWindow->title,
+            'term' => $reviewWindow->term,
+            'starts_at' => $reviewWindow->starts_at?->toIso8601String(),
+            'ends_at' => $reviewWindow->ends_at?->toIso8601String(),
+        ];
+
+        $reviewWindow->update($validated);
+
+        if ($sectionIds !== null) {
+            $reviewWindow->sections()->sync($sectionIds);
+        }
+
+        ActivityLogger::log($reviewWindow, 'review_window.updated', ['title' => $reviewWindow->title]);
+        AuditProvenanceLog::record(
+            $reviewWindow,
+            'updated',
+            $request->user(),
+            'Review window updated.',
+            $beforeState,
+            ['title' => $reviewWindow->title, 'term' => $reviewWindow->term]
+        );
 
         return response()->json([
-            'data' => $reviewWindow->fresh(),
+            'data' => $reviewWindow->fresh(['department', 'formVersion', 'sections']),
             'message' => 'Review window updated successfully.',
         ]);
     }
 
     /**
      * POST /api/admin/review-windows/{reviewWindow}/activate
-     * Transition: draft → active (blocks activation if another window is already active)
+     * Transition: draft → active (concurrency-safe single-active-window enforcement).
      */
-    public function activate(ReviewWindow $reviewWindow): JsonResponse
+    public function activate(Request $request, ReviewWindow $reviewWindow): JsonResponse
     {
-        if ($reviewWindow->status !== ReviewWindowStatus::Draft) {
-            return response()->json([
-                'message' => "Cannot activate: review window must be in 'draft' status. Current status: {$reviewWindow->status->value}.",
-            ], 422);
+        if (! $request->user()->canAccessDepartment($reviewWindow->department_id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
         }
 
-        // Single active window enforcement: block if another window is already active
-        $hasOtherActive = ReviewWindow::where('status', ReviewWindowStatus::Active)
-            ->where('id', '!=', $reviewWindow->id)
-            ->exists();
+        $activatedWindow = DB::transaction(function () use ($reviewWindow, $request) {
+            $window = ReviewWindow::whereKey($reviewWindow->id)->lockForUpdate()->first();
 
-        if ($hasOtherActive) {
-            return response()->json([
-                'message' => 'Cannot activate review window: another review window is currently active. Close the active window first.',
-            ], 422);
-        }
+            if (! $window) {
+                abort(404, 'Review window not found.');
+            }
 
-        $reviewWindow->update(['status' => ReviewWindowStatus::Active]);
+            if ($window->status !== ReviewWindowStatus::Draft) {
+                abort(422, "Cannot activate: review window must be in 'draft' status. Current status: {$window->status->value}.");
+            }
 
-        ActivityLogger::log($reviewWindow, 'review_window.activated', ['title' => $reviewWindow->title]);
+            // Concurrency-safe check: lock and verify no other window is currently active
+            $hasOtherActive = ReviewWindow::where('status', ReviewWindowStatus::Active)
+                ->where('id', '!=', $window->id)
+                ->lockForUpdate()
+                ->exists();
 
-        // Notify every active student that the evaluation cycle is open.
-        NotificationService::sendMany(
-            User::where('role', 'student')->where('is_active', true)->get(),
-            'window',
-            'Review window is now open',
-            "'{$reviewWindow->title}' is now open. Submit your anonymous course evaluations before it closes on {$reviewWindow->ends_at->toFormattedDateString()}.",
-            ['review_window_id' => $reviewWindow->id, 'route' => '/courses'],
-        );
+            if ($hasOtherActive) {
+                abort(422, 'Cannot activate review window: another review window is currently active. Close the active window first.');
+            }
+
+            // Ensure form version is bound
+            if (! $window->form_version_id) {
+                $latestVersion = FormVersion::where('form_type', FormType::StudentReview->value)
+                    ->where('is_published', true)
+                    ->latest()
+                    ->first();
+                $window->form_version_id = $latestVersion?->id;
+            }
+
+            try {
+                $window->status = ReviewWindowStatus::Active;
+                $window->save();
+            } catch (\Illuminate\Database\QueryException $e) {
+                abort(422, 'Cannot activate review window: another review window is currently active. Close the active window first.');
+            }
+
+            // Snapshot eligible student roster at cycle opening
+            $rosterCount = $window->snapshotRoster();
+
+            ActivityLogger::log($window, 'review_window.activated', [
+                'title' => $window->title,
+                'roster_count' => $rosterCount,
+            ]);
+
+            AuditProvenanceLog::record(
+                $window,
+                'activated',
+                $request->user(),
+                "Review window activated. Snapshot created with {$rosterCount} eligible student enrollments.",
+                ['status' => 'draft'],
+                ['status' => 'active', 'roster_count' => $rosterCount]
+            );
+
+            return $window;
+        });
+
+        // Asynchronously dispatch notification fan-out via database queue
+        SendReviewWindowNotificationsJob::dispatch($activatedWindow);
 
         return response()->json([
-            'data' => $reviewWindow->fresh(),
+            'data' => $activatedWindow->fresh(['department', 'formVersion', 'sections']),
             'message' => 'Review window activated successfully.',
         ]);
     }
@@ -98,20 +216,41 @@ class ReviewWindowController extends Controller
      * POST /api/admin/review-windows/{reviewWindow}/close
      * Transition: active → closed
      */
-    public function close(ReviewWindow $reviewWindow): JsonResponse
+    public function close(Request $request, ReviewWindow $reviewWindow): JsonResponse
     {
-        if ($reviewWindow->status !== ReviewWindowStatus::Active) {
-            return response()->json([
-                'message' => "Cannot close: review window must be in 'active' status. Current status: {$reviewWindow->status->value}.",
-            ], 422);
+        if (! $request->user()->canAccessDepartment($reviewWindow->department_id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
         }
 
-        $reviewWindow->update(['status' => ReviewWindowStatus::Closed]);
+        $closedWindow = DB::transaction(function () use ($reviewWindow, $request) {
+            $window = ReviewWindow::whereKey($reviewWindow->id)->lockForUpdate()->first();
 
-        ActivityLogger::log($reviewWindow, 'review_window.closed', ['title' => $reviewWindow->title]);
+            if (! $window) {
+                abort(404, 'Review window not found.');
+            }
+
+            if ($window->status !== ReviewWindowStatus::Active) {
+                abort(422, "Cannot close: review window must be in 'active' status. Current status: {$window->status->value}.");
+            }
+
+            $window->status = ReviewWindowStatus::Closed;
+            $window->save();
+
+            ActivityLogger::log($window, 'review_window.closed', ['title' => $window->title]);
+            AuditProvenanceLog::record(
+                $window,
+                'closed',
+                $request->user(),
+                'Review window closed. Collection terminated.',
+                ['status' => 'active'],
+                ['status' => 'closed']
+            );
+
+            return $window;
+        });
 
         return response()->json([
-            'data' => $reviewWindow->fresh(),
+            'data' => $closedWindow->fresh(['department', 'formVersion', 'sections']),
             'message' => 'Review window closed successfully.',
         ]);
     }
@@ -120,29 +259,51 @@ class ReviewWindowController extends Controller
      * POST /api/admin/review-windows/{reviewWindow}/publish-results
      * Transition: closed → published
      */
-    public function publishResults(ReviewWindow $reviewWindow): JsonResponse
+    public function publishResults(Request $request, ReviewWindow $reviewWindow): JsonResponse
     {
-        if ($reviewWindow->status !== ReviewWindowStatus::Closed) {
-            return response()->json([
-                'message' => "Cannot publish results: review window must be in 'closed' status. Current status: {$reviewWindow->status->value}.",
-            ], 422);
+        if (! $request->user()->canAccessDepartment($reviewWindow->department_id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
         }
 
-        $reviewWindow->update(['status' => ReviewWindowStatus::Published]);
+        $publishedWindow = DB::transaction(function () use ($reviewWindow, $request) {
+            $window = ReviewWindow::whereKey($reviewWindow->id)->lockForUpdate()->first();
 
-        ActivityLogger::log($reviewWindow, 'review_window.published', ['title' => $reviewWindow->title]);
+            if (! $window) {
+                abort(404, 'Review window not found.');
+            }
 
-        // Notify students that aggregated results are now viewable.
+            if ($window->status !== ReviewWindowStatus::Closed) {
+                abort(422, "Cannot publish results: review window must be in 'closed' status. Current status: {$window->status->value}.");
+            }
+
+            $window->status = ReviewWindowStatus::Published;
+            $window->published_at = now();
+            $window->save();
+
+            ActivityLogger::log($window, 'review_window.published', ['title' => $window->title]);
+            AuditProvenanceLog::record(
+                $window,
+                'published',
+                $request->user(),
+                'Review window results authorized and published.',
+                ['status' => 'closed'],
+                ['status' => 'published', 'published_at' => $window->published_at->toIso8601String()]
+            );
+
+            return $window;
+        });
+
+        // Notify students
         NotificationService::sendMany(
             User::where('role', 'student')->where('is_active', true)->get(),
             'result',
             'Evaluation results published',
-            "Aggregated results for '{$reviewWindow->title}' are now available in the Published Results tab.",
-            ['review_window_id' => $reviewWindow->id, 'route' => '/results'],
+            "Aggregated results for '{$publishedWindow->title}' are now available.",
+            ['review_window_id' => $publishedWindow->id, 'route' => '/results'],
         );
 
         return response()->json([
-            'data' => $reviewWindow->fresh(),
+            'data' => $publishedWindow->fresh(['department', 'formVersion', 'sections']),
             'message' => 'Review window results published successfully.',
         ]);
     }

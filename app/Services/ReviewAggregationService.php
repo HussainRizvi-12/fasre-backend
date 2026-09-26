@@ -8,31 +8,26 @@ use App\Models\ReviewResponse;
 /**
  * Single source of truth for student-review results aggregation.
  *
- * Previously this logic was copy-pasted across three controllers
- * (Admin\ReviewResultsController, Student\StudentReviewController,
- * Admin\ExportController) — a change to the k-anonymity rule or scoring
- * math had to be applied in three places. Every consumer must use this
- * service so the anonymity threshold and aggregation math stay identical
- * everywhere.
+ * Implements disclosure controls:
+ * 1. Section-level suppression threshold (ANONYMITY_THRESHOLD = 5).
+ * 2. Per-question item-level suppression: optional items with < 5 valid answers
+ *    are suppressed even if the section as a whole has >= 5 responses.
+ * 3. Text responses are restricted to authorized QA surfaces and suppressed
+ *    if the response count is below threshold.
  */
 class ReviewAggregationService
 {
     /**
-     * Anonymity threshold: sections with fewer responses than this are
-     * suppressed entirely (k-anonymity rule).
+     * Minimum disclosure threshold for section and item-level results.
      */
     public const ANONYMITY_THRESHOLD = 5;
 
     /**
-     * Aggregate all active student-review answers for one
-     * window × section pair.
+     * Aggregate all active student-review answers for one window × section pair.
      *
-     * @param  iterable<\App\Models\Question>  $questions  Active student-review questions.
-     * @param  bool  $includeTextResponses  When true, free-text answers are
-     *               returned verbatim for authorized surfaces (admin QA
-     *               review). Responses are anonymous by table isolation —
-     *               NEVER enable this for student-facing endpoints.
-     * @return array{response_count: int, is_suppressed: bool, questions: array<int, array<string, mixed>>}
+     * @param  iterable<\App\Models\Question|object>  $questions
+     * @param  bool  $includeTextResponses
+     * @return array{response_count: int, is_suppressed: bool, message: ?string, questions: array<int, array<string, mixed>>}
      */
     public function aggregateSection(int $windowId, int $sectionId, iterable $questions, bool $includeTextResponses = false): array
     {
@@ -41,41 +36,50 @@ class ReviewAggregationService
             ->get();
 
         $responseCount = $responses->count();
-        $isSuppressed = $responseCount < self::ANONYMITY_THRESHOLD;
+        $isSectionSuppressed = $responseCount < self::ANONYMITY_THRESHOLD;
 
         $questionAggregates = [];
 
-        if (! $isSuppressed) {
+        if (! $isSectionSuppressed) {
             foreach ($questions as $q) {
                 $qId = (string) $q->id;
                 $answers = $responses->pluck("answers_json.{$qId}")->filter(fn ($v) => ! is_null($v) && $v !== '');
+                $validCount = $answers->count();
+                $isItemSuppressed = $validCount < self::ANONYMITY_THRESHOLD;
 
-                if ($q->question_type === QuestionType::Rating) {
+                $qType = $q->question_type instanceof QuestionType ? $q->question_type : QuestionType::tryFrom($q->question_type);
+
+                if ($qType === QuestionType::Rating) {
                     $questionAggregates[] = [
                         'question_id' => $q->id,
                         'question_text' => $q->question_text,
                         'type' => 'rating',
-                        'average' => $answers->count() > 0 ? round((float) $answers->avg(), 2) : 0.0,
-                        'response_count' => $answers->count(),
+                        'average' => (! $isItemSuppressed && $validCount > 0) ? round((float) $answers->avg(), 2) : ($validCount > 0 && ! $isItemSuppressed ? 0.0 : null),
+                        'response_count' => $validCount,
+                        'is_suppressed' => $isItemSuppressed,
+                        'status' => $isItemSuppressed ? 'suppressed_low_item_count' : 'available',
                     ];
-                } elseif ($q->question_type === QuestionType::YesNo) {
+                } elseif ($qType === QuestionType::YesNo) {
                     $yesCount = $answers->filter(fn ($v) => in_array($v, [true, 1, '1', 'yes', 'true'], true))->count();
                     $questionAggregates[] = [
                         'question_id' => $q->id,
                         'question_text' => $q->question_text,
                         'type' => 'yes_no',
-                        'percentage_yes' => $answers->count() > 0 ? round(($yesCount / $answers->count()) * 100, 2) : 0.0,
-                        'response_count' => $answers->count(),
+                        'percentage_yes' => (! $isItemSuppressed && $validCount > 0) ? round(($yesCount / $validCount) * 100, 2) : null,
+                        'response_count' => $validCount,
+                        'is_suppressed' => $isItemSuppressed,
+                        'status' => $isItemSuppressed ? 'suppressed_low_item_count' : 'available',
                     ];
                 } else {
                     $entry = [
                         'question_id' => $q->id,
                         'question_text' => $q->question_text,
                         'type' => 'text',
-                        'submission_count' => $answers->count(),
+                        'submission_count' => $validCount,
+                        'is_suppressed' => $isItemSuppressed,
                     ];
 
-                    if ($includeTextResponses) {
+                    if ($includeTextResponses && ! $isItemSuppressed) {
                         $entry['responses'] = $answers->map(fn ($v) => (string) $v)->values()->all();
                     }
 
@@ -86,7 +90,8 @@ class ReviewAggregationService
 
         return [
             'response_count' => $responseCount,
-            'is_suppressed' => $isSuppressed,
+            'is_suppressed' => $isSectionSuppressed,
+            'message' => $isSectionSuppressed ? 'Insufficient responses to display section results (< 5 responses).' : null,
             'questions' => $questionAggregates,
         ];
     }

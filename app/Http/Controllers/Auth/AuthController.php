@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
+use App\Services\AuthSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -40,31 +41,34 @@ class AuthController extends Controller
             ], 401);
         }
 
-        $token = $user->createToken('auth-token')->plainTextToken;
+        // Privileged MFA gate: if MFA is enabled, issue an ephemeral challenge token
+        if ($user->hasMfaEnabled()) {
+            $challengeToken = $user->createToken('mfa-challenge', ['mfa-challenge'], now()->addMinutes(5))->plainTextToken;
 
-        return response()->json([
-            'token' => $token,
-            'access_token' => $token,
-            'user' => $user,
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-            ],
-            'message' => 'Login successful.',
-        ]);
+            return response()->json([
+                'mfa_required' => true,
+                'challenge_token' => $challengeToken,
+                'message' => 'Multi-factor authentication required. Please enter your 6-digit verification code.',
+            ]);
+        }
+
+        return AuthSessionService::issue($user, $request, ['message' => 'Login successful.']);
     }
 
     /**
      * POST /api/logout
-     * Revoke the current token.
+     * Revoke the current token and clear the session cookie.
      */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $request->user()->currentAccessToken()?->delete();
+
+        $cookie = cookie()->forget('fasre_session');
+        $csrfCookie = cookie()->forget('fasre_csrf');
 
         return response()->json([
             'message' => 'Logged out successfully.',
-        ]);
+        ])->withCookie($cookie)->withCookie($csrfCookie);
     }
 
     /**

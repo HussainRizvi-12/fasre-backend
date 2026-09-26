@@ -13,7 +13,9 @@ class AuthAndCrossRoleMatrixTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $faculty;
+
     protected User $student;
 
     protected function setUp(): void
@@ -33,9 +35,9 @@ class AuthAndCrossRoleMatrixTest extends TestCase
             'password' => 'Password@123',
         ]);
         $res->assertOk()->assertJsonPath('user.role', 'admin');
-        $token = $res->json('token');
-
-        $this->withToken($token)->getJson('/api/me')
+        $res->assertJsonMissingPath('token');
+        $cookie = collect($res->headers->getCookies())->first(fn ($c) => $c->getName() === 'fasre_session');
+        $this->withCredentials()->withUnencryptedCookie('fasre_session', $cookie->getValue())->getJson('/api/me')
             ->assertOk()
             ->assertJsonPath('user.role', 'admin');
     }
@@ -156,4 +158,3 @@ class AuthAndCrossRoleMatrixTest extends TestCase
             ->assertJsonPath('message', 'Your account has been deactivated. Please contact the administrator.');
     }
 }
-

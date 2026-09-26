@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -18,11 +19,18 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'department_id',
         'is_active',
+        'mfa_secret',
+        'mfa_recovery_codes',
+        'mfa_enabled_at',
+        'mfa_required',
     ];
 
     protected $hidden = [
         'password',
+        'mfa_secret',
+        'mfa_recovery_codes',
     ];
 
     protected function casts(): array
@@ -31,10 +39,19 @@ class User extends Authenticatable
             'role' => UserRole::class,
             'is_active' => 'boolean',
             'password' => 'hashed',
+            'mfa_secret' => 'encrypted',
+            'mfa_recovery_codes' => 'array',
+            'mfa_enabled_at' => 'datetime',
+            'mfa_required' => 'boolean',
         ];
     }
 
-    // ── Role Helpers ──────────────────────────────────────────
+    // ── Role & Department Scope Helpers ──────────────────────────
+
+    public function hasMfaEnabled(): bool
+    {
+        return $this->mfa_enabled_at !== null && ! empty($this->mfa_secret);
+    }
 
     public function isAdmin(): bool
     {
@@ -51,7 +68,30 @@ class User extends Authenticatable
         return $this->role === UserRole::Student;
     }
 
+    public function isCentralQa(): bool
+    {
+        return $this->isAdmin() && $this->department_id === null;
+    }
+
+    public function canAccessDepartment(?int $deptId): bool
+    {
+        if ($this->isCentralQa()) {
+            return true;
+        }
+
+        if ($this->department_id !== null && $deptId !== null) {
+            return (int) $this->department_id === (int) $deptId;
+        }
+
+        return false;
+    }
+
     // ── Relationships ─────────────────────────────────────────
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
 
     public function facultyAssignments(): HasMany
     {

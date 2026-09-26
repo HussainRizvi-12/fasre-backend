@@ -55,7 +55,7 @@ class SubmitStudentReviewRequest extends FormRequest
                 $submittedAnswers = collect($this->input('answers', []));
 
                 // 1. Verify review window is Active and currently within open date range
-                $window = ReviewWindow::find($windowId);
+                $window = ReviewWindow::with('formVersion')->find($windowId);
                 if (! $window || $window->status !== ReviewWindowStatus::Active || ! now()->between($window->starts_at, $window->ends_at)) {
                     $validator->errors()->add('review_window_id', 'The selected review window is not currently open for submissions (it is either not active or outside the start and end date window).');
                     return;
@@ -82,32 +82,49 @@ class SubmitStudentReviewRequest extends FormRequest
                     return;
                 }
 
-                // 4. Validate active student review questions
-                $activeQuestions = Question::where('form_type', FormType::StudentReview)
-                    ->where('is_active', true)
-                    ->get()
-                    ->keyBy('id');
+                // 4. Validate questions against frozen form version if present, otherwise live active questions
+                if ($window->form_version_id && $window->formVersion) {
+                    $validQuestions = collect($window->formVersion->getQuestions())->map(fn ($q) => [
+                        'id' => (int) $q['id'],
+                        'question_text' => $q['question_text'] ?? '',
+                        'question_type' => $q['question_type'] instanceof QuestionType ? $q['question_type']->value : ($q['question_type'] ?? 'text'),
+                        'is_required' => (bool) ($q['is_required'] ?? false),
+                    ])->keyBy('id');
+                } else {
+                    $validQuestions = Question::where('form_type', FormType::StudentReview)
+                        ->where('is_active', true)
+                        ->get()
+                        ->map(fn ($q) => [
+                            'id' => (int) $q->id,
+                            'question_text' => $q->question_text,
+                            'question_type' => $q->question_type instanceof QuestionType ? $q->question_type->value : $q->question_type,
+                            'is_required' => (bool) $q->is_required,
+                        ])
+                        ->keyBy('id');
+                }
 
-                // Check that submitted question_ids belong to active student_review questions
+                // Check that submitted question_ids belong to the valid form questions
                 foreach ($submittedAnswers as $index => $answer) {
-                    $qId = $answer['question_id'] ?? null;
-                    if (! $activeQuestions->has($qId)) {
-                        $validator->errors()->add("answers.{$index}.question_id", "Question ID {$qId} is not an active student review question.");
+                    $qId = isset($answer['question_id']) ? (int) $answer['question_id'] : null;
+                    if (! $validQuestions->has($qId)) {
+                        $validator->errors()->add("answers.{$index}.question_id", "Question ID {$qId} is not a valid question for this review window.");
                         continue;
                     }
 
-                    $question = $activeQuestions->get($qId);
+                    $question = $validQuestions->get($qId);
                     $val = $answer['value'] ?? null;
+                    $qType = $question['question_type'];
+                    $qText = $question['question_text'];
 
                     // Check value shape according to question type
                     if (! is_null($val) && $val !== '') {
-                        if ($question->question_type === QuestionType::Rating) {
+                        if ($qType === 'rating' || $qType === QuestionType::Rating->value) {
                             if (! is_numeric($val) || (int) $val < 1 || (int) $val > 5) {
-                                $validator->errors()->add("answers.{$index}.value", "Rating question '{$question->question_text}' must be an integer between 1 and 5.");
+                                $validator->errors()->add("answers.{$index}.value", "Rating question '{$qText}' must be an integer between 1 and 5.");
                             }
-                        } elseif ($question->question_type === QuestionType::YesNo) {
+                        } elseif ($qType === 'yes_no' || $qType === QuestionType::YesNo->value) {
                             if (! in_array($val, [true, false, 1, 0, '1', '0', 'yes', 'no', 'true', 'false'], true)) {
-                                $validator->errors()->add("answers.{$index}.value", "Yes/No question '{$question->question_text}' must be a boolean value.");
+                                $validator->errors()->add("answers.{$index}.value", "Yes/No question '{$qText}' must be a boolean value.");
                             }
                         }
                     }
@@ -117,11 +134,12 @@ class SubmitStudentReviewRequest extends FormRequest
                 $submittedQuestionIds = $submittedAnswers
                     ->filter(fn ($a) => isset($a['value']) && $a['value'] !== '' && ! is_null($a['value']))
                     ->pluck('question_id')
+                    ->map(fn ($id) => (int) $id)
                     ->all();
 
-                foreach ($activeQuestions as $question) {
-                    if ($question->is_required && ! in_array($question->id, $submittedQuestionIds, true)) {
-                        $validator->errors()->add('answers', "Required question '{$question->question_text}' is missing an answer.");
+                foreach ($validQuestions as $question) {
+                    if ($question['is_required'] && ! in_array($question['id'], $submittedQuestionIds, true)) {
+                        $validator->errors()->add('answers', "Required question '{$question['question_text']}' is missing an answer.");
                     }
                 }
             },

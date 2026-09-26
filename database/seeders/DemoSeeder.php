@@ -284,6 +284,7 @@ class DemoSeeder extends Seeder
         // ── 8. Active 14-Day Review Window ──────────────────────────
         $window = ReviewWindow::create([
             'title' => 'Fall 2026 Student Reviews',
+            'term' => 'Fall 2026',
             'description' => 'End-of-semester faculty evaluation cycle for all undergraduate courses.',
             'starts_at' => Carbon::now()->subDays(2),
             'ends_at' => Carbon::now()->addDays(12),

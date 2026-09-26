@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // The previous at:'*' trusted every hop, letting any client spoof
         // X-Forwarded-For and reset rate-limit buckets at will.
         $middleware->trustProxies(at: 'REMOTE_ADDR');
+        $middleware->prependToGroup('api', \App\Http\Middleware\AuthenticateFromSessionCookie::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

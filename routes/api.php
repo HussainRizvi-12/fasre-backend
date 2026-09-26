@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\CourseController;
 use App\Http\Controllers\Admin\DepartmentController;
 use App\Http\Controllers\Admin\ExportController;
 use App\Http\Controllers\Admin\FacultyAssignmentController;
+use App\Http\Controllers\Admin\FormVersionController;
 use App\Http\Controllers\Admin\QuestionController;
 use App\Http\Controllers\Admin\ReviewResultsController;
 use App\Http\Controllers\Admin\ReviewWindowController;
@@ -14,11 +15,14 @@ use App\Http\Controllers\Admin\SectionController;
 use App\Http\Controllers\Admin\StudentEnrollmentController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\MfaController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Faculty\AuditEvidenceController;
 use App\Http\Controllers\Faculty\FacultyAuditController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Student\StudentReviewController;
+use App\Http\Middleware\EnsureAccountIsActive;
+use App\Http\Middleware\EnsureAdminMfaEnrolled;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsFaculty;
 use App\Http\Middleware\EnsureUserIsStudent;
@@ -30,12 +34,17 @@ $registerApiRoutes = function () {
     // password guessers a second, independent throttle bucket. The named
     // `login` limiter (AppServiceProvider) keys on the target account, so
     // spoofing X-Forwarded-For cannot reset the per-email budget.
+    Route::get('/health', fn () => response()->json(['status' => 'ok', 'timestamp' => now()->toIso8601String()]));
     Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
     Route::post('/forgot-password', [PasswordResetController::class, 'forgot'])->middleware('throttle:6,1');
     Route::post('/reset-password', [PasswordResetController::class, 'reset'])->middleware('throttle:6,1');
 
+    // MFA Challenge & Recovery (publicly reachable with valid challenge token)
+    Route::post('/mfa/challenge', [MfaController::class, 'challenge'])->middleware('throttle:5,1');
+    Route::post('/mfa/recovery', [MfaController::class, 'recovery'])->middleware('throttle:5,1');
+
     // ── Auth (Protected) ────────────────────────────────────────────
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', EnsureAccountIsActive::class])->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
@@ -48,8 +57,14 @@ $registerApiRoutes = function () {
 
     // ── Admin APIs ──────────────────────────────────────────────────
     Route::prefix('admin')
-        ->middleware(['auth:sanctum', EnsureUserIsAdmin::class])
+        ->middleware(['auth:sanctum', EnsureAccountIsActive::class, EnsureUserIsAdmin::class, EnsureAdminMfaEnrolled::class])
         ->group(function () {
+
+            // Multi-Factor Authentication Management
+            Route::get('mfa/status', [MfaController::class, 'status']);
+            Route::post('mfa/setup', [MfaController::class, 'setup']);
+            Route::post('mfa/confirm', [MfaController::class, 'confirm']);
+            Route::post('mfa/disable', [MfaController::class, 'disable']);
 
             // Users CRUD
             Route::apiResource('users', UserController::class);
@@ -85,11 +100,19 @@ $registerApiRoutes = function () {
             // Review Results Aggregation (Phase 6)
             Route::get('review-results', [ReviewResultsController::class, 'index']);
 
+            // Form Versions (Frozen instruments for cycles and audits)
+            Route::apiResource('form-versions', FormVersionController::class)
+                ->only(['index', 'show', 'store']);
+
             // Audit Assignments (Admin management API for the web portal)
             Route::apiResource('audit-assignments', AuditAssignmentController::class)
                 ->only(['index', 'store', 'show']);
             Route::post('audit-assignments/{id}/approve', [AuditAssignmentController::class, 'approve']);
             Route::post('audit-assignments/{id}/reject', [AuditAssignmentController::class, 'reject']);
+            Route::post('audit-assignments/{id}/close', [AuditAssignmentController::class, 'close']);
+            Route::get('audit-assignments/{id}/actions', [AuditAssignmentController::class, 'actions']);
+            Route::post('audit-assignments/{id}/actions', [AuditAssignmentController::class, 'storeAction']);
+            Route::patch('audit-assignments/{id}/actions/{actionId}', [AuditAssignmentController::class, 'updateAction']);
 
             // Evidence attachments for audits (admin QA review surface).
             // The controller methods authorize admins explicitly alongside
@@ -115,7 +138,7 @@ $registerApiRoutes = function () {
 
     // ── Student Review APIs ─────────────────────────────────────────
     Route::prefix('student')
-        ->middleware(['auth:sanctum', EnsureUserIsStudent::class])
+        ->middleware(['auth:sanctum', EnsureAccountIsActive::class, EnsureUserIsStudent::class])
         ->group(function () {
             Route::get('/enrolled-sections', [StudentReviewController::class, 'enrolledSections']);
             Route::get('/review-windows/active', [StudentReviewController::class, 'activeReviewWindow']);
@@ -126,7 +149,7 @@ $registerApiRoutes = function () {
 
     // ── Faculty Audit APIs (Phase 5 & 6) ────────────────────────────
     Route::prefix('faculty')
-        ->middleware(['auth:sanctum', EnsureUserIsFaculty::class])
+        ->middleware(['auth:sanctum', EnsureAccountIsActive::class, EnsureUserIsFaculty::class])
         ->group(function () {
             Route::get('/assigned-audits', [FacultyAuditController::class, 'assignedAudits']);
             Route::get('/audits/{id}', [FacultyAuditController::class, 'show']);
@@ -138,6 +161,9 @@ $registerApiRoutes = function () {
             Route::get('/evidence/{fileId}/download', [AuditEvidenceController::class, 'download']);
             Route::get('/my-submissions', [FacultyAuditController::class, 'mySubmissions']);
             Route::get('/my-reports', [FacultyAuditController::class, 'myReports']);
+            Route::post('/my-reports/{id}/response', [FacultyAuditController::class, 'respondToReport']);
+            Route::get('/my-reports/{id}/actions', [FacultyAuditController::class, 'reportActions']);
+            Route::patch('/my-reports/{id}/actions/{actionId}', [FacultyAuditController::class, 'updateReportAction']);
         });
 };
 

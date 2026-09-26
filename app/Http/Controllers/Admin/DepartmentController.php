@@ -21,6 +21,10 @@ class DepartmentController extends Controller
 
     public function store(StoreDepartmentRequest $request): JsonResponse
     {
+        if (! $request->user()->isCentralQa()) {
+            abort(403, 'Forbidden. Only central QA administrators may create departments.');
+        }
+
         $department = Department::create($request->validated());
 
         ActivityLogger::log($department, 'department_created', ['name' => $department->name]);
@@ -31,8 +35,12 @@ class DepartmentController extends Controller
         ], 201);
     }
 
-    public function show(Department $department): JsonResponse
+    public function show(\Illuminate\Http\Request $request, Department $department): JsonResponse
     {
+        if (! $request->user()->canAccessDepartment($department->id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
+        }
+
         return response()->json([
             'data' => $department,
             'message' => 'Department retrieved successfully.',
@@ -41,6 +49,10 @@ class DepartmentController extends Controller
 
     public function update(UpdateDepartmentRequest $request, Department $department): JsonResponse
     {
+        if (! $request->user()->isCentralQa()) {
+            abort(403, 'Forbidden. Only central QA administrators may modify departments.');
+        }
+
         $department->update($request->validated());
 
         return response()->json([
@@ -49,8 +61,12 @@ class DepartmentController extends Controller
         ]);
     }
 
-    public function destroy(Department $department): JsonResponse
+    public function destroy(\Illuminate\Http\Request $request, Department $department): JsonResponse
     {
+        if (! $request->user()->isCentralQa()) {
+            abort(403, 'Forbidden. Only central QA administrators may delete departments.');
+        }
+
         $department->delete();
 
         return response()->json([

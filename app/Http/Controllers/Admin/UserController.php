@@ -14,7 +14,13 @@ class UserController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $caller = $request->user();
         $query = User::query();
+
+        if ($caller && $caller->isAdmin() && ! $caller->isCentralQa()) {
+            $query->where('department_id', $caller->department_id)
+                ->where('role', '!=', \App\Enums\UserRole::Admin);
+        }
 
         if ($request->has('role')) {
             $query->where('role', $request->role);
@@ -58,7 +64,12 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): JsonResponse
     {
-        $user = User::create($request->validated());
+        $validated = $request->validated();
+        if (! $request->user()->isCentralQa()) {
+            $validated['department_id'] = $request->user()->department_id;
+        }
+
+        $user = User::create($validated);
 
         ActivityLogger::log($user, 'user.created', ['name' => $user->name, 'role' => $user->role->value]);
 
@@ -68,8 +79,15 @@ class UserController extends Controller
         ], 201);
     }
 
-    public function show(User $user): JsonResponse
+    public function show(Request $request, User $user): JsonResponse
     {
+        $caller = $request->user();
+        if ($caller && ! $caller->isCentralQa()) {
+            if ($user->isAdmin() || (int) $user->department_id !== (int) $caller->department_id) {
+                return response()->json(['message' => 'Forbidden. Access restricted by department scope.'], 403);
+            }
+        }
+
         return response()->json([
             'data' => $user,
             'message' => 'User retrieved successfully.',
@@ -88,8 +106,15 @@ class UserController extends Controller
         ]);
     }
 
-    public function destroy(User $user): JsonResponse
+    public function destroy(Request $request, User $user): JsonResponse
     {
+        $caller = $request->user();
+        if ($caller && ! $caller->isCentralQa()) {
+            if ($user->isAdmin() || (int) $user->department_id !== (int) $caller->department_id) {
+                return response()->json(['message' => 'Forbidden. Access restricted by department scope.'], 403);
+            }
+        }
+
         ActivityLogger::log(null, 'user.deleted', ['name' => $user->name, 'email' => $user->email]);
 
         $user->delete();

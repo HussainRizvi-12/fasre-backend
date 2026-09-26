@@ -32,7 +32,7 @@ class SaveAuditDraftRequest extends FormRequest
     {
         return [
             'answers' => ['nullable', 'array', 'max:100'],
-            'answers.*.question_id' => ['required_with:answers', 'integer', 'exists:questions,id'],
+            'answers.*.question_id' => ['required_with:answers', 'integer'],
             // Scalar-only + bounded length (see SubmitStudentReviewRequest).
             'answers.*.value' => ['nullable', function (string $attribute, mixed $value, \Closure $fail) {
                 if (is_array($value) || is_object($value)) {
@@ -57,17 +57,47 @@ class SaveAuditDraftRequest extends FormRequest
                 }
 
                 $auditId = $this->route('id') ?? $this->route('audit');
-                $audit = AuditAssignment::find($auditId);
+                $audit = AuditAssignment::with('formVersion')->find($auditId);
 
                 if (! $audit) {
                     $validator->errors()->add('audit', 'Audit assignment not found.');
                     return;
                 }
 
-                // Submitted and Approved audits are finalized. A Rejected audit
-                // MUST accept revised drafts — that is the resubmission flow.
-                if (in_array($audit->status, [AuditAssignmentStatus::Submitted, AuditAssignmentStatus::Approved], true)) {
-                    $validator->errors()->add('audit', 'Cannot save draft. This audit has already been submitted and is finalized.');
+                // Only Assigned, InProgress, and Rejected audits can receive drafts.
+                // Finalized/post-approval states (Submitted, Approved, FacultyResponded, ActionPlanActive, Closed) are locked.
+                if (! $audit->isEditableByAuditor()) {
+                    $validator->errors()->add('audit', "Cannot save draft. This audit is in '{$audit->status->value}' status and is finalized.");
+                    return;
+                }
+
+                $submittedAnswers = collect($this->input('answers', []));
+                if ($submittedAnswers->isEmpty()) {
+                    return;
+                }
+
+                if ($audit->form_version_id && $audit->formVersion) {
+                    $validIds = collect($audit->formVersion->getQuestions())->pluck('id')->map(fn ($id) => (int) $id)->all();
+                } else {
+                    $validIds = \App\Models\Question::where('form_type', \App\Enums\FormType::FacultyAudit)
+                        ->pluck('id')
+                        ->map(fn ($id) => (int) $id)
+                        ->all();
+                }
+
+                $seen = [];
+                foreach ($submittedAnswers as $index => $answer) {
+                    $qId = isset($answer['question_id']) ? (int) $answer['question_id'] : null;
+                    if ($qId !== null) {
+                        if (in_array($qId, $seen, true)) {
+                            $validator->errors()->add("answers.{$index}.question_id", "Duplicate question ID {$qId} in draft.");
+                            continue;
+                        }
+                        $seen[] = $qId;
+                        if (! in_array($qId, $validIds, true)) {
+                            $validator->errors()->add("answers.{$index}.question_id", "Question ID {$qId} does not belong to this audit instrument.");
+                        }
+                    }
                 }
             },
         ];

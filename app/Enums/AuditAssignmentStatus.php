@@ -9,4 +9,7 @@ enum AuditAssignmentStatus: string
     case Submitted = 'submitted';
     case Approved = 'approved';
     case Rejected = 'rejected';
+    case FacultyResponded = 'faculty_responded';
+    case ActionPlanActive = 'action_plan_active';
+    case Closed = 'closed';
 }

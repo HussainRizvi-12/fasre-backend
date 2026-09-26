@@ -264,16 +264,20 @@ class StudentReviewApiTest extends TestCase
             ->assertJsonStructure([
                 'message',
                 'data' => [
-                    'pseudonym_token',
+                    'confirmation_code',
+                    'submitted_at',
                 ],
-            ]);
+            ])
+            ->assertJsonMissingPath('data.pseudonym_token');
 
-        $pseudonymToken = $response->json('data.pseudonym_token');
-        $this->assertTrue(Str::isUuid($pseudonymToken));
+        $confirmationCode = $response->json('data.confirmation_code');
+        $this->assertStringStartsWith('FASRE-', $confirmationCode);
 
         // ── Anonymity & Isolation Verification ──
         // 1. review_responses must have the response with pseudonym_token and NO identity column
-        $responseRow = ReviewResponse::where('pseudonym_token', $pseudonymToken)->first();
+        $responseRow = ReviewResponse::where('review_window_id', $this->activeWindow->id)
+            ->where('section_id', $this->enrolledSection->id)
+            ->first();
         $this->assertNotNull($responseRow);
         $this->assertEquals($this->activeWindow->id, $responseRow->review_window_id);
         $this->assertEquals($this->enrolledSection->id, $responseRow->section_id);
@@ -314,6 +318,9 @@ class StudentReviewApiTest extends TestCase
 
     public function test_review_response_cannot_be_correlated_with_participation_via_precise_timestamp(): void
     {
+        ReviewWindow::where('status', ReviewWindowStatus::Active)
+            ->update(['status' => ReviewWindowStatus::Closed]);
+
         $testWindow = ReviewWindow::create([
             'title' => 'Timestamp Side-Channel Test Window',
             'starts_at' => now()->subDay(),

@@ -31,7 +31,7 @@ class AdminAuditAssignmentApiTest extends TestCase
         $this->auditor = $faculty[0];
         $this->auditee = $faculty[1];
         $this->student = User::where('role', UserRole::Student)->first();
-        $this->section = Section::first();
+        $this->section = \App\Models\FacultyAssignment::where('faculty_id', $this->auditee->id)->first()->section;
     }
 
     private function adminToken(): string

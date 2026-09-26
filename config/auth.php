@@ -3,6 +3,8 @@
 use App\Models\User;
 
 return [
+    'mfa_enforced' => env('MFA_REQUIRED_FOR_ADMINS', false),
+    'portal_session_minutes' => (int) env('PORTAL_SESSION_MINUTES', 120),
 
     /*
     |--------------------------------------------------------------------------

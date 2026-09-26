@@ -66,6 +66,51 @@ class NotificationService
     }
 
     /**
+     * Efficiently bulk-inserts in-app notification rows in chunks.
+     *
+     * @param  iterable<int|string>  $userIds
+     * @param  array<string, mixed>  $data
+     */
+    public static function bulkInsertInApp(
+        iterable $userIds,
+        string $type,
+        string $title,
+        string $body,
+        array $data = [],
+        int $chunkSize = 200
+    ): int {
+        $now = now();
+        $payload = json_encode($data);
+        $total = 0;
+        $batch = [];
+
+        foreach ($userIds as $userId) {
+            $batch[] = [
+                'user_id' => $userId,
+                'title' => $title,
+                'body' => $body,
+                'type' => $type,
+                'data' => $payload,
+                'is_read' => false,
+                'created_at' => $now,
+            ];
+
+            if (count($batch) >= $chunkSize) {
+                AppNotification::insert($batch);
+                $total += count($batch);
+                $batch = [];
+            }
+        }
+
+        if (! empty($batch)) {
+            AppNotification::insert($batch);
+            $total += count($batch);
+        }
+
+        return $total;
+    }
+
+    /**
      * Email is best-effort: in production without SMTP configured this must
      * never break the main flow — failures are logged and swallowed.
      */

@@ -186,6 +186,10 @@ class ResultsAggregationAndReportTest extends TestCase
     {
         $adminToken = $this->admin->createToken('admin_test')->plainTextToken;
 
+        // Close any existing active window to satisfy single-active constraint
+        ReviewWindow::where('status', ReviewWindowStatus::Active)
+            ->update(['status' => ReviewWindowStatus::Closed]);
+
         // Create an active review window
         $activeWindow = ReviewWindow::create([
             'title' => 'Active Review Window',

@@ -10,16 +10,28 @@ use Illuminate\Http\JsonResponse;
 
 class SectionController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(\Illuminate\Http\Request $request): JsonResponse
     {
+        $user = $request->user();
+        $query = Section::with('course.department');
+
+        if ($user && $user->isAdmin() && ! $user->isCentralQa()) {
+            $query->whereHas('course', fn ($q) => $q->where('department_id', $user->department_id));
+        }
+
         return response()->json([
-            'data' => Section::with('course.department')->get(),
+            'data' => $query->get(),
             'message' => 'Sections retrieved successfully.',
         ]);
     }
 
     public function store(StoreSectionRequest $request): JsonResponse
     {
+        $course = \App\Models\Course::find($request->input('course_id'));
+        if (! $request->user()->canAccessDepartment($course?->department_id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
+        }
+
         $section = Section::create($request->validated());
 
         return response()->json([
@@ -28,8 +40,12 @@ class SectionController extends Controller
         ], 201);
     }
 
-    public function show(Section $section): JsonResponse
+    public function show(\Illuminate\Http\Request $request, Section $section): JsonResponse
     {
+        if (! $request->user()->canAccessDepartment($section->course?->department_id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
+        }
+
         return response()->json([
             'data' => $section->load('course.department'),
             'message' => 'Section retrieved successfully.',
@@ -38,6 +54,17 @@ class SectionController extends Controller
 
     public function update(UpdateSectionRequest $request, Section $section): JsonResponse
     {
+        if (! $request->user()->canAccessDepartment($section->course?->department_id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
+        }
+
+        if ($request->filled('course_id')) {
+            $newCourse = \App\Models\Course::find($request->input('course_id'));
+            if (! $request->user()->canAccessDepartment($newCourse?->department_id)) {
+                abort(403, 'Forbidden. Target course is outside your authorized department scope.');
+            }
+        }
+
         $section->update($request->validated());
 
         return response()->json([
@@ -46,12 +73,29 @@ class SectionController extends Controller
         ]);
     }
 
-    public function destroy(Section $section): JsonResponse
+    public function destroy(\Illuminate\Http\Request $request, Section $section): JsonResponse
     {
+        if (! $request->user()->canAccessDepartment($section->course?->department_id)) {
+            abort(403, 'Forbidden. Access restricted by department scope.');
+        }
+
+        $hasHistory = $section->hasEvaluations();
+
+        // Perform soft delete to preserve historical references
         $section->delete();
 
+        \App\Models\AuditProvenanceLog::record(
+            $section,
+            $hasHistory ? 'archived_with_evaluations' : 'archived',
+            $request->user(),
+            $hasHistory ? 'Section archived; historical evaluations protected against deletion.' : 'Section archived.',
+            ['name' => $section->name, 'term' => $section->term, 'course_id' => $section->course_id]
+        );
+
         return response()->json([
-            'message' => 'Section deleted successfully.',
+            'message' => $hasHistory
+                ? 'Section archived. Historical evaluation and audit records have been preserved.'
+                : 'Section deleted successfully.',
         ]);
     }
 }

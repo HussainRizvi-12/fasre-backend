@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\AuditProvenanceLog;
 use App\Models\Course;
 use App\Models\Department;
 use App\Models\FacultyAssignment;
@@ -17,7 +18,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Bulk CSV import for institutional data.
+ * Bulk CSV import for institutional data with validation, dry-run preview,
+ * reconciliation summary, and append-only provenance logging.
  *
  * Supported entity types (post field: type):
  *   - users                : name,email,role,is_active
@@ -33,9 +35,11 @@ class BulkImportController extends Controller
         $request->validate([
             'type' => ['required', 'in:users,courses,sections,student-enrollments,faculty-assignments'],
             'csv' => ['required', 'string', 'max:2048000'],
+            'dry_run' => ['nullable', 'boolean'],
         ]);
 
         $type = $request->input('type');
+        $isDryRun = $request->boolean('dry_run');
         $rows = $this->parseCsv($request->input('csv'));
 
         if (empty($rows)) {
@@ -50,7 +54,65 @@ class BulkImportController extends Controller
             ]);
         }
 
-        $result = match ($type) {
+        // If dry run, execute inside a rolling-back transaction to simulate real DB constraints
+        if ($isDryRun) {
+            $result = null;
+            try {
+                DB::transaction(function () use ($type, $rows, &$result) {
+                    $result = $this->executeImport($type, $rows);
+                    throw new \Exception('DRY_RUN_ROLLBACK');
+                });
+            } catch (\Exception $e) {
+                if ($e->getMessage() !== 'DRY_RUN_ROLLBACK') {
+                    throw $e;
+                }
+            }
+
+            return response()->json([
+                'data' => [
+                    'dry_run' => true,
+                    'total_rows' => count($rows),
+                    'valid_count' => $result['created'] ?? 0,
+                    'skipped_count' => $result['skipped'] ?? 0,
+                    'errors' => $result['errors'] ?? [],
+                    'preview' => array_slice($rows, 0, 5),
+                ],
+                'message' => "Dry-run validation complete: " . ($result['created'] ?? 0) . " valid, " . ($result['skipped'] ?? 0) . " skipped.",
+            ]);
+        }
+
+        $result = $this->executeImport($type, $rows);
+
+        ActivityLogger::log(null, "bulk_import.{$type}", [
+            'created' => $result['created'],
+            'skipped' => $result['skipped'],
+        ]);
+
+        // Audit provenance log
+        AuditProvenanceLog::record(
+            $request->user(),
+            "bulk_import.{$type}",
+            $request->user(),
+            "Imported {$result['created']} records for entity '{$type}' ({$result['skipped']} skipped).",
+            null,
+            ['type' => $type, 'created' => $result['created'], 'skipped' => $result['skipped']]
+        );
+
+        return response()->json([
+            'data' => [
+                'dry_run' => false,
+                'total_rows' => count($rows),
+                'created' => $result['created'],
+                'skipped' => $result['skipped'],
+                'errors' => $result['errors'],
+            ],
+            'message' => "Import finished: {$result['created']} created, {$result['skipped']} skipped.",
+        ]);
+    }
+
+    private function executeImport(string $type, array $rows): array
+    {
+        return match ($type) {
             'users' => $this->importUsers($rows),
             'courses' => $this->importCourses($rows),
             'sections' => $this->importSections($rows),
@@ -58,16 +120,6 @@ class BulkImportController extends Controller
             'faculty-assignments' => $this->importFacultyAssignments($rows),
             default => throw ValidationException::withMessages(['type' => 'Unsupported import type.']),
         };
-
-        ActivityLogger::log(null, "bulk_import.{$type}", [
-            'created' => $result['created'],
-            'skipped' => $result['skipped'],
-        ]);
-
-        return response()->json([
-            'data' => $result,
-            'message' => "Import finished: {$result['created']} created, {$result['skipped']} skipped.",
-        ]);
     }
 
     /**
