@@ -485,5 +485,21 @@ class StudentReviewApiTest extends TestCase
             ->assertOk()
             ->assertJson(['data' => null]);
     }
+
+    public function test_enrolled_sections_handles_soft_deleted_sections_safely(): void
+    {
+        $token = $this->student->createToken('student_test')->plainTextToken;
+
+        // Soft delete the enrolled section
+        $this->enrolledSection->delete();
+
+        // Must succeed with 200 OK and omit the deleted section, not crash with 500
+        $response = $this->withToken($token)
+            ->getJson('/api/student/enrolled-sections')
+            ->assertOk();
+
+        $sections = collect($response->json('data'));
+        $this->assertFalse($sections->contains('section.id', $this->enrolledSection->id));
+    }
 }
 

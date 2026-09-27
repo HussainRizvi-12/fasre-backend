@@ -90,7 +90,7 @@ class FacultyAuditController extends Controller
                 ],
                 'status' => $a->status->value,
                 'due_date' => $a->due_date?->toDateString(),
-                'is_overdue' => $a->due_date ? ($a->due_date->endOfDay()->isPast() && ! in_array($a->status, [AuditAssignmentStatus::Submitted, AuditAssignmentStatus::Approved], true)) : false,
+                'is_overdue' => $a->due_date ? ($a->due_date->endOfDay()->isPast() && in_array($a->status, [AuditAssignmentStatus::Assigned, AuditAssignmentStatus::InProgress, AuditAssignmentStatus::Rejected], true)) : false,
                 'due_in_days' => $a->due_date ? (int) now()->startOfDay()->diffInDays($a->due_date->startOfDay(), false) : null,
                 'answers_json' => $a->answers_json,
                 'comments_json' => $a->comments_json,

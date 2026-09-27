@@ -233,5 +233,22 @@ class FacultyAuditApiTest extends TestCase
             ])
             ->assertForbidden();
     }
+
+    public function test_completed_or_approved_audit_is_not_flagged_overdue(): void
+    {
+        // Set due date to 5 days ago, but status to Approved
+        $this->auditAssignment->update([
+            'due_date' => now()->subDays(5),
+            'status' => AuditAssignmentStatus::Approved,
+        ]);
+
+        $token = $this->auditor->createToken('faculty_test')->plainTextToken;
+        $response = $this->withToken($token)->getJson('/api/faculty/assigned-audits');
+
+        $response->assertOk();
+        $auditData = collect($response->json('data'))->firstWhere('id', $this->auditAssignment->id);
+
+        $this->assertFalse($auditData['is_overdue']);
+    }
 }
 

@@ -41,13 +41,18 @@ class StudentReviewController extends Controller
             'section.facultyAssignments.faculty',
         ])
             ->where('student_id', $student->id)
+            ->whereHas('section')
             ->get();
 
         $data = $enrollments->map(function ($enrollment) use ($activeWindow, $student) {
             $section = $enrollment->section;
-            $course = $section?->course;
-            $primaryFaculty = $section?->facultyAssignments?->firstWhere('is_primary', true)?->faculty
-                ?? $section?->facultyAssignments?->first()?->faculty;
+            if (! $section) {
+                return null;
+            }
+
+            $course = $section->course;
+            $primaryFaculty = $section->facultyAssignments?->firstWhere('is_primary', true)?->faculty
+                ?? $section->facultyAssignments?->first()?->faculty;
 
             // Compute review status flag for active window
             if (! $activeWindow) {
@@ -75,9 +80,9 @@ class StudentReviewController extends Controller
             return [
                 'enrollment_id' => $enrollment->id,
                 'section' => [
-                    'id' => $section?->id,
-                    'name' => $section?->name,
-                    'term' => $section?->term,
+                    'id' => $section->id,
+                    'name' => $section->name,
+                    'term' => $section->term,
                 ],
                 'course' => [
                     'id' => $course?->id,
@@ -89,7 +94,7 @@ class StudentReviewController extends Controller
                 'review_status' => $reviewStatus,
                 'is_eligible' => $isEligible,
             ];
-        });
+        })->filter()->values();
 
         return response()->json([
             'data' => $data,
