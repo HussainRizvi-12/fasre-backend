@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 echo "==> Configuring Nginx for Laravel on Azure App Service..."
 
 # Copy custom Nginx configuration pointing to public/ directory
@@ -26,19 +27,20 @@ fi
 # Create storage symlink
 php artisan storage:link --force 2>/dev/null || true
 
-# Run database migrations
-echo "==> Running database migrations..."
-php artisan migrate --force || true
-
 # Clear stale caches
 echo "==> Clearing stale caches..."
 rm -f /home/site/wwwroot/bootstrap/cache/config.php /home/site/wwwroot/bootstrap/cache/routes*.php /home/site/wwwroot/bootstrap/cache/packages.php /home/site/wwwroot/bootstrap/cache/services.php 2>/dev/null || true
-php artisan optimize:clear 2>/dev/null || true
+php artisan optimize:clear
+
+# Migrate only after stale configuration is cleared. A failed migration must
+# fail startup rather than announce a ready application with the wrong schema.
+echo "==> Running database migrations..."
+php artisan migrate --force
 
 # Run optimization caches
 echo "==> Caching config, routes, and views..."
-php artisan config:cache 2>/dev/null || true
-php artisan route:cache 2>/dev/null || true
-php artisan view:cache 2>/dev/null || true
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
 
 echo "==> Laravel is ready on Azure App Service."

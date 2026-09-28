@@ -23,6 +23,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Student\StudentReviewController;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureAdminMfaEnrolled;
+use App\Http\Middleware\EnsureCentralQa;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsFaculty;
 use App\Http\Middleware\EnsureUserIsStudent;
@@ -88,7 +89,8 @@ $registerApiRoutes = function () {
 
             // Questions CRUD
             Route::apiResource('questions', QuestionController::class)
-                ->except(['show']);
+                ->except(['show'])
+                ->middlewareFor(['store', 'update', 'destroy'], EnsureCentralQa::class);
 
             // Review Windows CRUD + State Machine
             Route::apiResource('review-windows', ReviewWindowController::class)
@@ -102,7 +104,8 @@ $registerApiRoutes = function () {
 
             // Form Versions (Frozen instruments for cycles and audits)
             Route::apiResource('form-versions', FormVersionController::class)
-                ->only(['index', 'show', 'store']);
+                ->only(['index', 'show', 'store'])
+                ->middlewareFor(['store'], EnsureCentralQa::class);
 
             // Audit Assignments (Admin management API for the web portal)
             Route::apiResource('audit-assignments', AuditAssignmentController::class)
@@ -130,10 +133,10 @@ $registerApiRoutes = function () {
             Route::get('export/enrollments', [ExportController::class, 'enrollments']);
             Route::get('export/review-results', [ExportController::class, 'reviewResults']);
             Route::get('export/audit-assignments', [ExportController::class, 'auditAssignments']);
-            Route::get('export/activity-logs', [ExportController::class, 'activityLogs']);
+            Route::get('export/activity-logs', [ExportController::class, 'activityLogs'])->middleware(EnsureCentralQa::class);
 
             // Admin activity trail (accountability)
-            Route::get('activity-logs', [ActivityLogController::class, 'index']);
+            Route::get('activity-logs', [ActivityLogController::class, 'index'])->middleware(EnsureCentralQa::class);
         });
 
     // ── Student Review APIs ─────────────────────────────────────────

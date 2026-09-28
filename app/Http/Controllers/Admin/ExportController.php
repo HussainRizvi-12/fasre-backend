@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Enums\AuditAssignmentStatus;
 use App\Enums\FormType;
 use App\Enums\QuestionType;
 use App\Enums\ReviewWindowStatus;
@@ -23,10 +22,14 @@ class ExportController extends Controller
 {
     public function users(Request $request): StreamedResponse
     {
-        return $this->streamCsv('fasre-users.csv', function ($file) {
+        return $this->streamCsv('fasre-users.csv', function ($file) use ($request) {
             $this->writeRow($file, ['id', 'name', 'email', 'role', 'is_active', 'created_at']);
 
-            User::query()->orderBy('id')->chunk(500, function ($users) use ($file) {
+            $query = User::query();
+            if (! $request->user()->isCentralQa()) {
+                $query->where('department_id', $request->user()->department_id)->where('role', '!=', 'admin');
+            }
+            $query->orderBy('id')->chunk(500, function ($users) use ($file) {
                 foreach ($users as $u) {
                     $this->writeRow($file, [$u->id, $u->name, $u->email, $u->role->value, $u->is_active ? 'active' : 'inactive', $u->created_at?->toDateTimeString()]);
                 }
@@ -156,6 +159,7 @@ class ExportController extends Controller
 
                 if ($aggregate['is_suppressed']) {
                     $this->writeRow($file, [...$base, '(suppressed — fewer than 5 responses)', '', '']);
+
                     continue;
                 }
 
@@ -191,10 +195,7 @@ class ExportController extends Controller
 
             if ($request->user()->department_id) {
                 $userDeptId = $request->user()->department_id;
-                $query->where(function ($q) use ($userDeptId) {
-                    $q->whereHas('section.course', fn ($sq) => $sq->where('department_id', $userDeptId))
-                      ->orWhereHas('auditee', fn ($aq) => $aq->where('department_id', $userDeptId));
-                });
+                $query->whereHas('section.course', fn ($q) => $q->where('department_id', $userDeptId));
             }
 
             $query->chunk(500, function ($audits) use ($file) {
@@ -230,7 +231,7 @@ class ExportController extends Controller
                         $l->created_at?->toIso8601String(),
                         $l->user?->name ?? 'System',
                         $l->action,
-                        $l->subject_type ? class_basename($l->subject_type) . "#{$l->subject_id}" : '',
+                        $l->subject_type ? class_basename($l->subject_type)."#{$l->subject_id}" : '',
                         json_encode($l->properties),
                     ]);
                 }
@@ -249,7 +250,7 @@ class ExportController extends Controller
 
         // Prefix leading formula trigger characters
         if ($value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
-            return "'" . $value;
+            return "'".$value;
         }
 
         return $value;

@@ -14,6 +14,9 @@ class FacultyAssignmentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = FacultyAssignment::with(['section.course', 'faculty']);
+        if (! $request->user()->isCentralQa()) {
+            $query->whereHas('section.course', fn ($q) => $q->where('department_id', $request->user()->department_id));
+        }
 
         if ($request->has('section_id')) {
             $query->where('section_id', $request->section_id);
@@ -52,8 +55,9 @@ class FacultyAssignmentController extends Controller
         ], 201);
     }
 
-    public function destroy(FacultyAssignment $facultyAssignment): JsonResponse
+    public function destroy(Request $request, FacultyAssignment $facultyAssignment): JsonResponse
     {
+        abort_unless($request->user()->canAccessDepartment($facultyAssignment->section?->course?->department_id), 403);
         $facultyAssignment->delete();
 
         return response()->json([

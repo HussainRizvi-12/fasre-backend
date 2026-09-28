@@ -6,6 +6,7 @@ use App\Enums\FormType;
 use App\Enums\QuestionType;
 use App\Enums\ReviewWindowStatus;
 use App\Enums\UserRole;
+use App\Models\FormVersion;
 use App\Models\Question;
 use App\Models\ReviewParticipation;
 use App\Models\ReviewResponse;
@@ -18,7 +19,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class StudentReviewApiTest extends TestCase
@@ -26,9 +26,13 @@ class StudentReviewApiTest extends TestCase
     use RefreshDatabase;
 
     protected User $student;
+
     protected User $faculty;
+
     protected User $admin;
+
     protected ReviewWindow $activeWindow;
+
     protected Section $enrolledSection;
 
     protected function setUp(): void
@@ -42,6 +46,54 @@ class StudentReviewApiTest extends TestCase
 
         $this->activeWindow = ReviewWindow::where('status', ReviewWindowStatus::Active)->first();
         $this->enrolledSection = StudentEnrollment::where('student_id', $this->student->id)->first()->section;
+    }
+
+    public function test_duplicate_answers_cannot_overwrite_a_required_answer_with_null(): void
+    {
+        $before = ReviewResponse::count();
+        $answers = Question::where('form_type', FormType::StudentReview)->where('is_active', true)->get()
+            ->map(fn ($q) => ['question_id' => $q->id, 'value' => $q->question_type === QuestionType::Rating ? 5 : true])->all();
+        $answers[] = ['question_id' => $answers[0]['question_id'], 'value' => null];
+        $this->withToken($this->student->createToken('regression')->plainTextToken)->postJson('/api/student/reviews', [
+            'review_window_id' => $this->activeWindow->id, 'section_id' => $this->enrolledSection->id, 'answers' => $answers,
+        ])->assertUnprocessable();
+        $this->assertDatabaseCount('review_responses', $before);
+    }
+
+    public function test_fractional_ratings_are_rejected(): void
+    {
+        $answers = Question::where('form_type', FormType::StudentReview)->where('is_active', true)->get()
+            ->map(fn ($q) => ['question_id' => $q->id, 'value' => $q->question_type === QuestionType::Rating ? 5.9 : true])->all();
+        $this->withToken($this->student->createToken('regression')->plainTextToken)->postJson('/api/student/reviews', [
+            'review_window_id' => $this->activeWindow->id, 'section_id' => $this->enrolledSection->id, 'answers' => $answers,
+        ])->assertUnprocessable();
+    }
+
+    public function test_frozen_review_remains_submittable_when_live_questions_are_deleted(): void
+    {
+        $questions = Question::where('form_type', FormType::StudentReview)->where('is_active', true)->get();
+        $version = FormVersion::create([
+            'form_type' => 'student_review', 'version_code' => 'DELETED-LIVE', 'title' => 'Frozen review',
+            'is_published' => true, 'created_by' => $this->admin->id,
+            'questions_json' => $questions->map(fn ($q) => ['id' => $q->id, 'question_text' => $q->question_text, 'question_type' => $q->question_type->value, 'is_required' => $q->is_required])->all(),
+        ]);
+        $this->activeWindow->update(['form_version_id' => $version->id]);
+        $answers = $questions->map(fn ($q) => ['question_id' => $q->id, 'value' => $q->question_type === QuestionType::Rating ? 5 : true])->all();
+        Question::whereIn('id', $questions->pluck('id'))->delete();
+        $this->withToken($this->student->createToken('regression')->plainTextToken)->postJson('/api/student/reviews', [
+            'review_window_id' => $this->activeWindow->id, 'section_id' => $this->enrolledSection->id, 'answers' => $answers,
+        ])->assertCreated();
+    }
+
+    public function test_omitted_optional_answer_value_does_not_cause_a_server_error(): void
+    {
+        $this->activeWindow->update(['form_version_id' => null]);
+        $optional = Question::create(['form_type' => 'student_review', 'question_type' => 'text', 'question_text' => 'Optional comment', 'is_required' => false, 'is_active' => true, 'sort_order' => 99]);
+        $answers = Question::where('form_type', FormType::StudentReview)->where('is_active', true)->get()
+            ->map(fn ($q) => $q->id === $optional->id ? ['question_id' => $q->id] : ['question_id' => $q->id, 'value' => $q->question_type === QuestionType::Rating ? 5 : true])->all();
+        $this->withToken($this->student->createToken('regression')->plainTextToken)->postJson('/api/student/reviews', [
+            'review_window_id' => $this->activeWindow->id, 'section_id' => $this->enrolledSection->id, 'answers' => $answers,
+        ])->assertCreated();
     }
 
     // ── Role Authorization Tests ────────────────────────────────────
@@ -502,4 +554,3 @@ class StudentReviewApiTest extends TestCase
         $this->assertFalse($sections->contains('section.id', $this->enrolledSection->id));
     }
 }
-

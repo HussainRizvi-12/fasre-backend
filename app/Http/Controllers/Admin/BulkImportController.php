@@ -14,7 +14,10 @@ use App\Models\User;
 use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -56,16 +59,11 @@ class BulkImportController extends Controller
 
         // If dry run, execute inside a rolling-back transaction to simulate real DB constraints
         if ($isDryRun) {
-            $result = null;
+            DB::beginTransaction();
             try {
-                DB::transaction(function () use ($type, $rows, &$result) {
-                    $result = $this->executeImport($type, $rows);
-                    throw new \Exception('DRY_RUN_ROLLBACK');
-                });
-            } catch (\Exception $e) {
-                if ($e->getMessage() !== 'DRY_RUN_ROLLBACK') {
-                    throw $e;
-                }
+                $result = $this->executeImport($type, $rows, $request->user());
+            } finally {
+                DB::rollBack();
             }
 
             return response()->json([
@@ -75,13 +73,13 @@ class BulkImportController extends Controller
                     'valid_count' => $result['created'] ?? 0,
                     'skipped_count' => $result['skipped'] ?? 0,
                     'errors' => $result['errors'] ?? [],
-                    'preview' => array_slice($rows, 0, 5),
+                    'preview' => array_map(fn ($row) => array_diff_key($row, ['password' => true]), array_slice($rows, 0, 5)),
                 ],
-                'message' => "Dry-run validation complete: " . ($result['created'] ?? 0) . " valid, " . ($result['skipped'] ?? 0) . " skipped.",
+                'message' => 'Dry-run validation complete: '.($result['created'] ?? 0).' valid, '.($result['skipped'] ?? 0).' skipped.',
             ]);
         }
 
-        $result = $this->executeImport($type, $rows);
+        $result = $this->executeImport($type, $rows, $request->user());
 
         ActivityLogger::log(null, "bulk_import.{$type}", [
             'created' => $result['created'],
@@ -110,14 +108,14 @@ class BulkImportController extends Controller
         ]);
     }
 
-    private function executeImport(string $type, array $rows): array
+    private function executeImport(string $type, array $rows, User $actor): array
     {
         return match ($type) {
-            'users' => $this->importUsers($rows),
-            'courses' => $this->importCourses($rows),
-            'sections' => $this->importSections($rows),
-            'student-enrollments' => $this->importEnrollments($rows),
-            'faculty-assignments' => $this->importFacultyAssignments($rows),
+            'users' => $this->importUsers($rows, $actor),
+            'courses' => $this->importCourses($rows, $actor),
+            'sections' => $this->importSections($rows, $actor),
+            'student-enrollments' => $this->importEnrollments($rows, $actor),
+            'faculty-assignments' => $this->importFacultyAssignments($rows, $actor),
             default => throw ValidationException::withMessages(['type' => 'Unsupported import type.']),
         };
     }
@@ -127,41 +125,54 @@ class BulkImportController extends Controller
      */
     private function parseCsv(string $csv): array
     {
-        $csv = str_replace(["\r\n", "\r"], "\n", trim($csv));
-        $lines = array_values(array_filter(explode("\n", $csv), fn ($l) => trim($l) !== ''));
-
-        if (count($lines) < 2) {
-            return [];
-        }
-
-        $headers = array_map(fn ($h) => strtolower(trim($h)), str_getcsv($lines[0]));
-        $rows = [];
-
-        for ($i = 1; $i < count($lines); $i++) {
-            $values = str_getcsv($lines[$i]);
-            if (count($values) === 1 && trim((string) $values[0]) === '') {
-                continue;
+        $csv = str_replace(["\r\n", "\r"], "\n", $csv);
+        $csv = trim(preg_replace('/^\xEF\xBB\xBF/', '', $csv));
+        $stream = fopen('php://temp', 'r+');
+        try {
+            fwrite($stream, $csv);
+            rewind($stream);
+            $headerRow = fgetcsv($stream, null, ',', '"', '');
+            if ($headerRow === false || $headerRow === [null]) {
+                return [];
+            }
+            $headers = array_map(fn ($h) => strtolower(trim((string) $h)), $headerRow);
+            if (in_array('', $headers, true) || count(array_unique($headers)) !== count($headers)) {
+                throw ValidationException::withMessages(['csv' => 'Column names must be non-empty and unique.']);
+            }
+            $rows = [];
+            $line = 1 + substr_count(substr($csv, 0, ftell($stream)), "\n");
+            $offset = ftell($stream);
+            while (($values = fgetcsv($stream, null, ',', '"', '')) !== false) {
+                $rowLine = $line;
+                $nextOffset = ftell($stream);
+                $line += substr_count(substr($csv, $offset, $nextOffset - $offset), "\n");
+                $offset = $nextOffset;
+                if ($values === [null]) {
+                    continue;
+                }
+                if (count($values) !== count($headers)) {
+                    throw ValidationException::withMessages(['csv' => "Line {$rowLine}: column count does not match the header."]);
+                }
+                $row = array_combine($headers, array_map(fn ($v) => trim((string) $v), $values));
+                $row['_line'] = $rowLine;
+                $rows[] = $row;
             }
 
-            $row = [];
-            foreach ($headers as $idx => $header) {
-                $row[$header] = isset($values[$idx]) ? trim((string) $values[$idx]) : '';
-            }
-            $rows[] = $row;
+            return $rows;
+        } finally {
+            fclose($stream);
         }
-
-        return $rows;
     }
 
-    private function importUsers(array $rows): array
+    private function importUsers(array $rows, User $actor): array
     {
         $created = 0;
         $skipped = 0;
         $errors = [];
 
-        DB::transaction(function () use ($rows, &$created, &$skipped, &$errors) {
+        DB::transaction(function () use ($rows, $actor, &$created, &$skipped, &$errors) {
             foreach ($rows as $i => $row) {
-                $lineNo = $i + 2; // +1 header, +1 human numbering
+                $lineNo = $row['_line'];
                 $email = strtolower($row['email'] ?? '');
                 $name = $row['name'] ?? '';
                 $role = strtolower($row['role'] ?? '');
@@ -169,26 +180,59 @@ class BulkImportController extends Controller
                 if ($email === '' || $name === '') {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: missing name or email.";
+
                     continue;
                 }
 
                 if (! in_array($role, ['admin', 'faculty', 'student'], true)) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: invalid role '{$role}' (admin/faculty/student).";
+
+                    continue;
+                }
+
+                $departmentId = $actor->isCentralQa() ? null : $actor->department_id;
+                if (($row['department_code'] ?? '') !== '') {
+                    $departmentId = Department::whereRaw('LOWER(code) = ?', [strtolower($row['department_code'])])->value('id');
+                    if ($departmentId === null || ! $actor->canAccessDepartment($departmentId)) {
+                        $skipped++;
+                        $errors[] = "Line {$lineNo}: department not found or outside your authorized scope.";
+
+                        continue;
+                    }
+                }
+                if ($role === 'admin' && ! $actor->isCentralQa()) {
+                    $skipped++;
+                    $errors[] = "Line {$lineNo}: only Central QA can import administrator accounts.";
+
+                    continue;
+                }
+                $validation = Validator::make($row, [
+                    'name' => ['required', 'string', 'max:255'],
+                    'email' => ['required', 'email', 'max:255'],
+                    'password' => ['nullable', 'string', 'min:8'],
+                ]);
+                if ($validation->fails()) {
+                    $skipped++;
+                    $errors[] = "Line {$lineNo}: ".$validation->errors()->first();
+
                     continue;
                 }
 
                 if (User::where('email', $email)->exists()) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: {$email} already exists.";
+
                     continue;
                 }
 
                 User::create([
                     'name' => $name,
                     'email' => $email,
-                    'password' => ($row['password'] ?? '') !== '' ? $row['password'] : env('FASRE_DEMO_PASSWORD', 'Password@123'),
+                    // Omitted passwords require the existing email reset flow; never use a shared demo password.
+                    'password' => ($row['password'] ?? '') !== '' ? $row['password'] : Str::random(64),
                     'role' => $role,
+                    'department_id' => $departmentId,
                     'is_active' => ! in_array(strtolower($row['is_active'] ?? ''), ['0', 'false', 'no'], true),
                 ]);
                 $created++;
@@ -198,17 +242,19 @@ class BulkImportController extends Controller
         return compact('created', 'skipped', 'errors');
     }
 
-    private function importCourses(array $rows): array
+    private function importCourses(array $rows, User $actor): array
     {
         $created = 0;
         $skipped = 0;
         $errors = [];
 
-        $departments = Department::all()->keyBy(fn ($d) => strtolower($d->code ?? $d->name));
+        $departments = Department::query()
+            ->when(! $actor->isCentralQa(), fn ($q) => $q->where('id', $actor->department_id))
+            ->get()->keyBy(fn ($d) => strtolower($d->code ?? $d->name));
 
         DB::transaction(function () use ($rows, &$created, &$skipped, &$errors, $departments) {
             foreach ($rows as $i => $row) {
-                $lineNo = $i + 2;
+                $lineNo = $row['_line'];
                 $deptKey = strtolower($row['department_code'] ?? $row['department'] ?? '');
                 $code = strtoupper($row['code'] ?? '');
 
@@ -217,18 +263,33 @@ class BulkImportController extends Controller
                 if (! $department) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: department '{$deptKey}' not found. Create it first.";
+
                     continue;
                 }
 
                 if ($code === '' || ($row['title'] ?? '') === '') {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: missing code or title.";
+
+                    continue;
+                }
+
+                $validation = Validator::make($row, [
+                    'code' => ['required', 'string', 'max:50'],
+                    'title' => ['required', 'string', 'max:255'],
+                    'credit_hours' => ['nullable', 'integer', 'min:1', 'max:12'],
+                ]);
+                if ($validation->fails()) {
+                    $skipped++;
+                    $errors[] = "Line {$lineNo}: ".$validation->errors()->first();
+
                     continue;
                 }
 
                 if (Course::where('department_id', $department->id)->where('code', $code)->exists()) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: course {$code} already exists in {$department->name}.";
+
                     continue;
                 }
 
@@ -245,32 +306,37 @@ class BulkImportController extends Controller
         return compact('created', 'skipped', 'errors');
     }
 
-    private function importSections(array $rows): array
+    private function importSections(array $rows, User $actor): array
     {
         $created = 0;
         $skipped = 0;
         $errors = [];
 
-        $courses = Course::all()->keyBy('code');
+        $courses = Course::query()
+            ->when(! $actor->isCentralQa(), fn ($q) => $q->where('department_id', $actor->department_id))
+            ->get()->groupBy(fn ($c) => strtoupper($c->code));
 
         DB::transaction(function () use ($rows, &$created, &$skipped, &$errors, $courses) {
             foreach ($rows as $i => $row) {
-                $lineNo = $i + 2;
+                $lineNo = $row['_line'];
                 $courseCode = strtoupper($row['course_code'] ?? '');
                 $name = $row['name'] ?? '';
                 $term = $row['term'] ?? '';
 
                 /** @var Course|null $course */
-                $course = $courses->get($courseCode);
+                $matches = $courses->get($courseCode, collect());
+                $course = $matches->count() === 1 ? $matches->first() : null;
                 if (! $course) {
                     $skipped++;
-                    $errors[] = "Line {$lineNo}: course '{$courseCode}' not found.";
+                    $errors[] = "Line {$lineNo}: course '{$courseCode}' not found or ambiguous within your authorized scope.";
+
                     continue;
                 }
 
                 if ($name === '' || $term === '') {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: missing name or term.";
+
                     continue;
                 }
 
@@ -282,6 +348,7 @@ class BulkImportController extends Controller
                 if ($exists) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: section {$courseCode} · {$name} ({$term}) already exists.";
+
                     continue;
                 }
 
@@ -297,17 +364,17 @@ class BulkImportController extends Controller
         return compact('created', 'skipped', 'errors');
     }
 
-    private function importEnrollments(array $rows): array
+    private function importEnrollments(array $rows, User $actor): array
     {
         $created = 0;
         $skipped = 0;
         $errors = [];
 
-        [$sectionMap, $studentsByEmail] = $this->buildLookups();
+        [$sectionMap, $studentsByEmail] = $this->buildLookups($actor, UserRole::Student);
 
         DB::transaction(function () use ($rows, &$created, &$skipped, &$errors, $sectionMap, $studentsByEmail) {
             foreach ($rows as $i => $row) {
-                $lineNo = $i + 2;
+                $lineNo = $row['_line'];
                 $studentEmail = strtolower($row['student_email'] ?? '');
                 $key = $this->sectionKey($row);
 
@@ -318,16 +385,19 @@ class BulkImportController extends Controller
                 if (! $student || $student->role !== UserRole::Student) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: student '{$studentEmail}' not found.";
+
                     continue;
                 }
                 if (! $section) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: section '{$key}' not found.";
+
                     continue;
                 }
                 if (StudentEnrollment::where('section_id', $section->id)->where('student_id', $student->id)->exists()) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: student already enrolled in {$key}.";
+
                     continue;
                 }
 
@@ -342,17 +412,17 @@ class BulkImportController extends Controller
         return compact('created', 'skipped', 'errors');
     }
 
-    private function importFacultyAssignments(array $rows): array
+    private function importFacultyAssignments(array $rows, User $actor): array
     {
         $created = 0;
         $skipped = 0;
         $errors = [];
 
-        [$sectionMap, $facultyByEmail] = $this->buildLookups(UserRole::Faculty);
+        [$sectionMap, $facultyByEmail] = $this->buildLookups($actor, UserRole::Faculty);
 
         DB::transaction(function () use ($rows, &$created, &$skipped, &$errors, $sectionMap, $facultyByEmail) {
             foreach ($rows as $i => $row) {
-                $lineNo = $i + 2;
+                $lineNo = $row['_line'];
                 $facultyEmail = strtolower($row['faculty_email'] ?? '');
                 $key = $this->sectionKey($row);
                 $isPrimary = ! in_array(strtolower($row['is_primary'] ?? 'true'), ['0', 'false', 'no'], true);
@@ -364,16 +434,19 @@ class BulkImportController extends Controller
                 if (! $faculty || $faculty->role !== UserRole::Faculty) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: faculty '{$facultyEmail}' not found.";
+
                     continue;
                 }
                 if (! $section) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: section '{$key}' not found.";
+
                     continue;
                 }
                 if (FacultyAssignment::where('section_id', $section->id)->where('faculty_id', $faculty->id)->exists()) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: faculty already assigned to {$key}.";
+
                     continue;
                 }
 
@@ -396,18 +469,18 @@ class BulkImportController extends Controller
     }
 
     /**
-     * @return array{\Illuminate\Support\Collection<string, Section>, \Illuminate\Support\Collection<string, User>}
+     * @return array{Collection<string, Section>, Collection<string, User>}
      */
-    private function buildLookups(?UserRole $userRole = null): array
+    private function buildLookups(User $actor, UserRole $userRole): array
     {
-        $sectionMap = Section::with('course')->get()->keyBy(
-            fn (Section $s) => $this->makeSectionKey($s->course?->code ?? '', $s->name, $s->term),
-        );
+        $sectionMap = Section::with('course')->whereHas('course')
+            ->when(! $actor->isCentralQa(), fn ($q) => $q->whereHas('course', fn ($c) => $c->where('department_id', $actor->department_id)))
+            ->get()->groupBy(
+                fn (Section $s) => $this->makeSectionKey($s->course?->code ?? '', $s->name, $s->term),
+            )->filter(fn ($matches) => $matches->count() === 1)->map(fn ($matches) => $matches->first());
 
-        $userQuery = User::query();
-        if ($userRole) {
-            $userQuery->where('role', $userRole);
-        }
+        $userQuery = User::where('role', $userRole)
+            ->when(! $actor->isCentralQa(), fn ($q) => $q->where('department_id', $actor->department_id));
 
         return [$sectionMap, $userQuery->get()->keyBy(fn (User $u) => strtolower($u->email))];
     }

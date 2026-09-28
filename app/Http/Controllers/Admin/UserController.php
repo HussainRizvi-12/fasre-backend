@@ -2,13 +2,19 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
+use App\Models\AuditAssignment;
+use App\Models\AuditImprovementAction;
+use App\Models\ReviewWindowRoster;
 use App\Models\User;
 use App\Services\ActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -19,7 +25,7 @@ class UserController extends Controller
 
         if ($caller && $caller->isAdmin() && ! $caller->isCentralQa()) {
             $query->where('department_id', $caller->department_id)
-                ->where('role', '!=', \App\Enums\UserRole::Admin);
+                ->where('role', '!=', UserRole::Admin);
         }
 
         if ($request->has('role')) {
@@ -41,7 +47,7 @@ class UserController extends Controller
         $paginated = $request->query('paginated', 'false') === 'true' || $request->query('paginated') === '1';
 
         if ($paginated) {
-            $perPage = min((int) $request->query('per_page', '50'), 200);
+            $perPage = max(1, min((int) $request->query('per_page', '50'), 200));
             $paginator = $query->orderBy('name')->paginate($perPage);
 
             return response()->json([
@@ -96,7 +102,20 @@ class UserController extends Controller
 
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
-        $user->update($request->validated());
+        $validated = $request->validated();
+        if ($request->user()->id === $user->id
+            && ((array_key_exists('is_active', $validated) && ! $validated['is_active'])
+                || (isset($validated['role']) && $validated['role'] !== $user->role->value)
+                || (array_key_exists('department_id', $validated) && $validated['department_id'] != $user->department_id))) {
+            throw ValidationException::withMessages(['user' => 'You cannot remove your own administrative access. Ask another administrator to make this change.']);
+        }
+        DB::transaction(function () use ($user, $validated) {
+            $user->update($validated);
+            if ($user->wasChanged(['password', 'email', 'role', 'department_id', 'is_active'])) {
+                $user->tokens()->delete();
+                DB::table('mfa_enrollments')->where('user_id', $user->id)->delete();
+            }
+        });
 
         ActivityLogger::log($user, 'user.updated', ['name' => $user->name]);
 
@@ -115,9 +134,25 @@ class UserController extends Controller
             }
         }
 
-        ActivityLogger::log(null, 'user.deleted', ['name' => $user->name, 'email' => $user->email]);
+        if ($caller->id === $user->id) {
+            throw ValidationException::withMessages(['user' => 'You cannot delete your own account.']);
+        }
 
-        $user->delete();
+        DB::transaction(function () use ($user) {
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $hasAcademicRecords = $user->facultyAssignments()->exists()
+                || $user->studentEnrollments()->exists()
+                || $user->reviewParticipations()->exists()
+                || ReviewWindowRoster::where('student_id', $user->id)->exists()
+                || AuditAssignment::where('auditor_id', $user->id)->orWhere('auditee_id', $user->id)->orWhere('assigned_by', $user->id)->exists()
+                || AuditImprovementAction::where('owner_id', $user->id)->exists();
+            if ($hasAcademicRecords) {
+                throw ValidationException::withMessages(['user' => 'This account has academic records. Deactivate it instead to preserve evaluation and audit history.']);
+            }
+            ActivityLogger::log(null, 'user.deleted', ['name' => $user->name, 'email' => $user->email]);
+            $user->tokens()->delete();
+            $user->delete();
+        });
 
         return response()->json([
             'message' => 'User deleted successfully.',

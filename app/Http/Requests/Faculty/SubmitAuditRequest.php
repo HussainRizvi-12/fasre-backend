@@ -40,6 +40,7 @@ class SubmitAuditRequest extends FormRequest
             'answers.*.value' => ['nullable', function (string $attribute, mixed $value, \Closure $fail) {
                 if (is_array($value) || is_object($value)) {
                     $fail('Answer values must be plain text, numbers, or booleans.');
+
                     return;
                 }
                 if (is_string($value) && strlen($value) > 5000) {
@@ -64,6 +65,7 @@ class SubmitAuditRequest extends FormRequest
 
                 if (! $audit) {
                     $validator->errors()->add('audit', 'Audit assignment not found.');
+
                     return;
                 }
 
@@ -77,6 +79,7 @@ class SubmitAuditRequest extends FormRequest
                     AuditAssignmentStatus::Closed,
                 ], true)) {
                     $validator->errors()->add('audit', 'This audit has already been submitted and is finalized.');
+
                     return;
                 }
 
@@ -112,12 +115,14 @@ class SubmitAuditRequest extends FormRequest
 
                     if (in_array($qId, $seenQIds, true)) {
                         $validator->errors()->add("answers.{$index}.question_id", "Duplicate answer submitted for question ID {$qId}.");
+
                         continue;
                     }
                     $seenQIds[] = $qId;
 
                     if (! $validQuestions->has($qId)) {
                         $validator->errors()->add("answers.{$index}.question_id", "Question ID {$qId} is not a valid question for this audit rubric.");
+
                         continue;
                     }
 
@@ -128,7 +133,7 @@ class SubmitAuditRequest extends FormRequest
 
                     if (! is_null($val) && $val !== '') {
                         if ($qType === 'rating' || $qType === QuestionType::Rating->value) {
-                            if (! is_numeric($val) || (int) $val < 1 || (int) $val > 5) {
+                            if (! is_numeric($val) || (float) $val !== (float) (int) $val || (int) $val < 1 || (int) $val > 5) {
                                 $validator->errors()->add("answers.{$index}.value", "Rating question '{$qText}' must be an integer between 1 and 5.");
                             }
                         } elseif ($qType === 'yes_no' || $qType === QuestionType::YesNo->value) {

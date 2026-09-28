@@ -3,10 +3,10 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\AuditAssignmentStatus;
+use App\Enums\FormType;
 use App\Enums\UserRole;
 use App\Models\AuditAssignment;
 use App\Models\FacultyAssignment;
-use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,12 +30,12 @@ class StoreAuditAssignmentRequest extends FormRequest
                 'integer',
                 Rule::exists('users', 'id')->where('role', UserRole::Faculty->value)->where('is_active', true),
             ],
-            'section_id' => ['nullable', 'integer', 'exists:sections,id'],
+            'section_id' => ['nullable', 'integer', Rule::exists('sections', 'id')->whereNull('deleted_at')],
             'form_version_id' => [
                 'nullable',
                 'integer',
                 Rule::exists('form_versions', 'id')
-                    ->where('form_type', \App\Enums\FormType::FacultyAudit->value)
+                    ->where('form_type', FormType::FacultyAudit->value)
                     ->where('is_published', true),
             ],
             'observation_date' => ['nullable', 'date'],
@@ -68,6 +68,7 @@ class StoreAuditAssignmentRequest extends FormRequest
             // Conflict of interest: Self-audit prevention
             if ($auditorId === $auditeeId) {
                 $validator->errors()->add('auditee_id', 'Auditor and auditee must be different faculty members.');
+
                 return;
             }
 
@@ -79,6 +80,7 @@ class StoreAuditAssignmentRequest extends FormRequest
 
                 if (! $teachesSection) {
                     $validator->errors()->add('section_id', 'The selected auditee is not assigned to teach this section.');
+
                     return;
                 }
             }

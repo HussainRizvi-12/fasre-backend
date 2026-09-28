@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Enums\FormType;
+use App\Enums\QuestionType;
 use App\Enums\ReviewWindowStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Student\SubmitStudentReviewRequest;
@@ -267,7 +268,7 @@ class StudentReviewController extends Controller
         // Format answers for JSON storage (key-by question_id and list)
         $formattedAnswers = [];
         foreach ($submittedAnswers as $answer) {
-            $formattedAnswers[(string) $answer['question_id']] = $answer['value'];
+            $formattedAnswers[(string) $answer['question_id']] = $answer['value'] ?? null;
         }
 
         try {
@@ -302,7 +303,7 @@ class StudentReviewController extends Controller
         }
 
         $year = now()->year;
-        $confirmationCode = 'FASRE-' . $year . '-' . strtoupper(Str::random(4)) . '-' . strtoupper(Str::random(4));
+        $confirmationCode = 'FASRE-'.$year.'-'.strtoupper(Str::random(4)).'-'.strtoupper(Str::random(4));
 
         return response()->json([
             'message' => 'Review submitted successfully.',
@@ -351,7 +352,7 @@ class StudentReviewController extends Controller
                 $questions = collect($window->formVersion->getQuestions())->map(fn ($q) => (object) [
                     'id' => $q['id'],
                     'question_text' => $q['question_text'],
-                    'question_type' => \App\Enums\QuestionType::tryFrom($q['question_type']) ?? $q['question_type'],
+                    'question_type' => QuestionType::tryFrom($q['question_type']) ?? $q['question_type'],
                 ]);
             } else {
                 $questions = Question::where('form_type', FormType::StudentReview)

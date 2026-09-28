@@ -25,13 +25,16 @@ class SubmitStudentReviewRequest extends FormRequest
             'review_window_id' => ['required', 'integer', 'exists:review_windows,id'],
             'section_id' => ['required', 'integer', 'exists:sections,id'],
             'answers' => ['required', 'array', 'min:1', 'max:100'],
-            'answers.*.question_id' => ['required', 'integer', 'exists:questions,id'],
+            // Membership is checked against the frozen instrument below. A live
+            // question may have been deleted after this version was published.
+            'answers.*.question_id' => ['required', 'integer', 'distinct'],
             // Scalar-only + bounded length: blocks multi-megabyte strings,
             // nested arrays/objects, and other junk payloads from bloating
             // the answers_json column (aggregation hydrates these rows).
             'answers.*.value' => ['nullable', function (string $attribute, mixed $value, \Closure $fail) {
                 if (is_array($value) || is_object($value)) {
                     $fail('Answer values must be plain text, numbers, or booleans.');
+
                     return;
                 }
                 if (is_string($value) && strlen($value) > 5000) {
@@ -58,6 +61,7 @@ class SubmitStudentReviewRequest extends FormRequest
                 $window = ReviewWindow::with('formVersion')->find($windowId);
                 if (! $window || $window->status !== ReviewWindowStatus::Active || ! now()->between($window->starts_at, $window->ends_at)) {
                     $validator->errors()->add('review_window_id', 'The selected review window is not currently open for submissions (it is either not active or outside the start and end date window).');
+
                     return;
                 }
 
@@ -68,6 +72,7 @@ class SubmitStudentReviewRequest extends FormRequest
 
                 if (! $isEnrolled) {
                     $validator->errors()->add('section_id', 'You are not enrolled in this section.');
+
                     return;
                 }
 
@@ -79,6 +84,7 @@ class SubmitStudentReviewRequest extends FormRequest
 
                 if ($hasSubmitted) {
                     $validator->errors()->add('review', 'You have already submitted a review for this section in this review window.');
+
                     return;
                 }
 
@@ -108,6 +114,7 @@ class SubmitStudentReviewRequest extends FormRequest
                     $qId = isset($answer['question_id']) ? (int) $answer['question_id'] : null;
                     if (! $validQuestions->has($qId)) {
                         $validator->errors()->add("answers.{$index}.question_id", "Question ID {$qId} is not a valid question for this review window.");
+
                         continue;
                     }
 
@@ -119,7 +126,7 @@ class SubmitStudentReviewRequest extends FormRequest
                     // Check value shape according to question type
                     if (! is_null($val) && $val !== '') {
                         if ($qType === 'rating' || $qType === QuestionType::Rating->value) {
-                            if (! is_numeric($val) || (int) $val < 1 || (int) $val > 5) {
+                            if (! is_numeric($val) || (float) $val !== (float) (int) $val || (int) $val < 1 || (int) $val > 5) {
                                 $validator->errors()->add("answers.{$index}.value", "Rating question '{$qText}' must be an integer between 1 and 5.");
                             }
                         } elseif ($qType === 'yes_no' || $qType === QuestionType::YesNo->value) {

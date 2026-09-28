@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Admin;
 
 use App\Enums\UserRole;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,8 +21,8 @@ class UpdateUserRequest extends FormRequest
         }
 
         $target = $this->route('user');
-        if (! $target instanceof \App\Models\User) {
-            $target = \App\Models\User::find($target);
+        if (! $target instanceof User) {
+            $target = User::find($target);
         }
 
         if (! $target) {
@@ -44,7 +45,7 @@ class UpdateUserRequest extends FormRequest
         }
 
         // Delegated admin cannot reassign user away from their department
-        if ($this->filled('department_id') && (int) $this->input('department_id') !== (int) $caller->department_id) {
+        if ($this->exists('department_id') && (int) $this->input('department_id') !== (int) $caller->department_id) {
             return false;
         }
 

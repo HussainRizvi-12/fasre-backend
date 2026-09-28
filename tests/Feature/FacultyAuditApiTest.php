@@ -19,9 +19,13 @@ class FacultyAuditApiTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $auditor;
+
     protected User $auditee;
+
     protected User $student;
+
     protected AuditAssignment $auditAssignment;
 
     protected function setUp(): void
@@ -55,6 +59,14 @@ class FacultyAuditApiTest extends TestCase
             ->getJson('/api/faculty/assigned-audits')
             ->assertForbidden()
             ->assertJson(['message' => 'Forbidden. Faculty access required.']);
+    }
+
+    public function test_fractional_audit_ratings_are_rejected(): void
+    {
+        $answers = Question::where('form_type', FormType::FacultyAudit)->where('is_active', true)->get()
+            ->map(fn ($q) => ['question_id' => $q->id, 'value' => $q->question_type === QuestionType::Rating ? 5.9 : true])->all();
+        $this->withToken($this->auditor->createToken('regression')->plainTextToken)
+            ->postJson("/api/faculty/audits/{$this->auditAssignment->id}/submit", ['answers' => $answers])->assertUnprocessable();
     }
 
     public function test_faculty_can_view_assigned_audits(): void
@@ -251,4 +263,3 @@ class FacultyAuditApiTest extends TestCase
         $this->assertFalse($auditData['is_overdue']);
     }
 }
-

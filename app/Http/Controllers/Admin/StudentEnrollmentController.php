@@ -13,6 +13,9 @@ class StudentEnrollmentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = StudentEnrollment::with(['section.course', 'student']);
+        if (! $request->user()->isCentralQa()) {
+            $query->whereHas('section.course', fn ($q) => $q->where('department_id', $request->user()->department_id));
+        }
 
         if ($request->has('section_id')) {
             $query->where('section_id', $request->section_id);
@@ -38,8 +41,9 @@ class StudentEnrollmentController extends Controller
         ], 201);
     }
 
-    public function destroy(StudentEnrollment $studentEnrollment): JsonResponse
+    public function destroy(Request $request, StudentEnrollment $studentEnrollment): JsonResponse
     {
+        abort_unless($request->user()->canAccessDepartment($studentEnrollment->section?->course?->department_id), 403);
         $studentEnrollment->delete();
 
         return response()->json([

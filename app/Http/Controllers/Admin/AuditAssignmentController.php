@@ -7,7 +7,6 @@ use App\Enums\FormType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreAuditAssignmentRequest;
 use App\Models\AuditAssignment;
-use App\Models\AuditImprovementAction;
 use App\Models\AuditProvenanceLog;
 use App\Models\FormVersion;
 use App\Models\Section;
@@ -52,6 +51,8 @@ class AuditAssignmentController extends Controller
     public function store(StoreAuditAssignmentRequest $request): JsonResponse
     {
         $sectionId = $request->filled('section_id') ? (int) $request->input('section_id') : null;
+
+        abort_if($sectionId === null && ! $request->user()->isCentralQa(), 403, 'Department administrators must select a section within their department.');
 
         // Department scope check
         if ($sectionId) {
@@ -551,8 +552,8 @@ class AuditAssignmentController extends Controller
 
             $remarks = $validated['closure_remarks'];
             $newAdminRemarks = $assignment->admin_remarks
-                ? $assignment->admin_remarks . "\n\n[QA Closure Note]: " . $remarks
-                : "[QA Closure Note]: " . $remarks;
+                ? $assignment->admin_remarks."\n\n[QA Closure Note]: ".$remarks
+                : '[QA Closure Note]: '.$remarks;
 
             $assignment->update([
                 'status' => AuditAssignmentStatus::Closed,

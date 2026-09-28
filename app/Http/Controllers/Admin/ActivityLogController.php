@@ -11,7 +11,7 @@ class ActivityLogController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $perPage = min((int) $request->query('per_page', '50'), 200);
+        $perPage = max(1, min((int) $request->query('per_page', '50'), 200));
         $page = max((int) $request->query('page', '1'), 1);
 
         $paginator = ActivityLog::with('user')
