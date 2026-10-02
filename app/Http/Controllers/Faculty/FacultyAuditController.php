@@ -10,7 +10,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Faculty\SaveAuditDraftRequest;
 use App\Http\Requests\Faculty\SubmitAuditRequest;
 use App\Models\AuditAssignment;
-use App\Models\AuditImprovementAction;
 use App\Models\AuditProvenanceLog;
 use App\Models\Question;
 use App\Models\User;
@@ -57,7 +56,7 @@ class FacultyAuditController extends Controller
      */
     public function assignedAudits(Request $request): JsonResponse
     {
-        $audits = AuditAssignment::with(['auditee', 'section.course'])
+        $audits = AuditAssignment::with(['auditee', 'section.course', 'formVersion'])
             ->where('auditor_id', $request->user()->id)
             ->orderBy('due_date')
             ->get();
@@ -94,7 +93,7 @@ class FacultyAuditController extends Controller
                 'due_in_days' => $a->due_date ? (int) now()->startOfDay()->diffInDays($a->due_date->startOfDay(), false) : null,
                 'answers_json' => $a->answers_json,
                 'comments_json' => $a->comments_json,
-                'published_question_ids' => $questionIds,
+                'published_question_ids' => $a->formVersion ? collect($a->formVersion->getQuestions())->pluck('id')->all() : $questionIds,
                 'admin_remarks' => $a->admin_remarks,
                 'total_score' => $a->total_score,
             ]),
@@ -177,6 +176,14 @@ class FacultyAuditController extends Controller
         if ($request->filled('audit_id')) {
             $audit = AuditAssignment::with('formVersion')->find($request->input('audit_id'));
             if ($audit && $audit->form_version_id && $audit->formVersion) {
+                // The frozen questionnaire is assignment-scoped data: only the
+                // assigned auditor (or the auditee of an approved audit) may
+                // read it, mirroring the show() authorization.
+                $userId = $request->user()->id;
+                if ($audit->auditor_id !== $userId && ($audit->auditee_id !== $userId || $audit->status !== AuditAssignmentStatus::Approved)) {
+                    return response()->json(['message' => 'Forbidden. Access restricted.'], 403);
+                }
+
                 return response()->json([
                     'data' => $audit->formVersion->getQuestions(),
                     'form_version' => [
@@ -227,7 +234,7 @@ class FacultyAuditController extends Controller
             $audit->update([
                 'answers_json' => $formattedAnswers,
                 'comments_json' => $formattedComments,
-                'status' => AuditAssignmentStatus::InProgress,
+                'status' => $audit->status === AuditAssignmentStatus::Rejected ? AuditAssignmentStatus::Rejected : AuditAssignmentStatus::InProgress,
             ]);
 
             return $audit;
@@ -387,7 +394,7 @@ class FacultyAuditController extends Controller
      */
     public function myReports(Request $request): JsonResponse
     {
-        $reports = AuditAssignment::with(['auditor', 'section.course', 'formVersion', 'improvementActions.owner'])
+        $reports = AuditAssignment::with(['auditor', 'section.course', 'formVersion', 'improvementActions.owner', 'evidenceFiles'])
             ->where('auditee_id', $request->user()->id)
             ->whereIn('status', [
                 AuditAssignmentStatus::Approved,
@@ -464,6 +471,10 @@ class FacultyAuditController extends Controller
                     'submitted_at' => $r->submitted_at?->toIso8601String(),
                     'approved_at' => $r->approved_at?->toIso8601String(),
                     'breakdown' => $breakdown,
+                    'comments' => $r->comments_json ?? [],
+                    'recommendations' => $r->comments_json['recommendations'] ?? null,
+                    'can_respond' => empty($r->faculty_response) && $r->status !== AuditAssignmentStatus::Closed,
+                    'evidence' => $r->evidenceFiles->map(fn ($f) => ['id' => $f->id, 'original_name' => $f->original_name, 'mime_type' => $f->mime_type, 'size_bytes' => $f->size_bytes, 'client_attachment_id' => $f->client_attachment_id]),
                     'improvement_actions' => $r->improvementActions->map(fn ($a) => [
                         'id' => $a->id,
                         'finding' => $a->finding,
@@ -523,6 +534,11 @@ class FacultyAuditController extends Controller
         ];
 
         DB::transaction(function () use ($audit, $responseText) {
+            $locked = AuditAssignment::whereKey($audit->id)->lockForUpdate()->firstOrFail();
+            if (! empty($locked->faculty_response) || ! in_array($locked->status, [AuditAssignmentStatus::Approved, AuditAssignmentStatus::FacultyResponded, AuditAssignmentStatus::ActionPlanActive], true)) {
+                throw ValidationException::withMessages(['response' => 'A response cannot be submitted again or after this audit is closed.']);
+            }
+            $audit->setRawAttributes($locked->getAttributes(), true);
             $audit->update([
                 'faculty_response' => $responseText,
                 'faculty_responded_at' => now(),

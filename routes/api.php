@@ -160,6 +160,7 @@ $registerApiRoutes = function () {
             Route::post('/audits/{id}/save-draft', [FacultyAuditController::class, 'saveDraft']);
             Route::post('/audits/{id}/submit', [FacultyAuditController::class, 'submit']);
             Route::post('/audits/{id}/evidence', [AuditEvidenceController::class, 'upload']);
+            Route::delete('/audits/{id}/evidence/{attachmentKey}', [AuditEvidenceController::class, 'destroy']);
             Route::get('/audits/{id}/evidence', [AuditEvidenceController::class, 'index']);
             Route::get('/evidence/{fileId}/download', [AuditEvidenceController::class, 'download']);
             Route::get('/my-submissions', [FacultyAuditController::class, 'mySubmissions']);

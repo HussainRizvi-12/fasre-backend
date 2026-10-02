@@ -10,6 +10,8 @@ class AuditEvidenceFile extends Model
     protected $fillable = [
         'audit_assignment_id',
         'question_id',
+        'client_attachment_id',
+        'original_sha256',
         'original_name',
         'stored_path',
         'mime_type',

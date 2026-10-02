@@ -38,6 +38,7 @@ class AuditEvidenceController extends Controller
         $request->validate([
             'file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:20480'],
             'question_id' => ['nullable', 'integer'],
+            'client_attachment_id' => ['nullable', 'string', 'regex:/^[a-f0-9]{64}$/'],
         ]);
 
         $storedPath = null;
@@ -55,6 +56,20 @@ class AuditEvidenceController extends Controller
                     throw ValidationException::withMessages([
                         'audit' => "Cannot attach evidence. This audit is in '{$audit->status->value}' status and is finalized.",
                     ]);
+                }
+
+                // Retry identity refers to the original bytes, before image sanitization.
+                $clientId = $request->input('client_attachment_id');
+                $originalHash = hash_file('sha256', $request->file('file')->getRealPath());
+                if ($clientId) {
+                    $existing = $audit->evidenceFiles->firstWhere('client_attachment_id', $clientId);
+                    if ($existing) {
+                        if ($existing->original_sha256 !== $originalHash || (string) $existing->question_id !== (string) $request->input('question_id')) {
+                            throw ValidationException::withMessages(['file' => 'This attachment identity belongs to different evidence. Please attach the file again.']);
+                        }
+
+                        return response()->json(['data' => $this->transform($existing)], 200);
+                    }
                 }
 
                 // Quota check: file count
@@ -113,6 +128,8 @@ class AuditEvidenceController extends Controller
                 $uploaded = AuditEvidenceFile::create([
                     'audit_assignment_id' => $audit->id,
                     'question_id' => $questionId,
+                    'client_attachment_id' => $clientId,
+                    'original_sha256' => $originalHash,
                     'original_name' => $file->getClientOriginalName(),
                     'stored_path' => $storedPath,
                     'mime_type' => $file->getMimeType(),
@@ -209,6 +226,29 @@ class AuditEvidenceController extends Controller
         return Storage::disk('local')->download($file->stored_path, $file->original_name);
     }
 
+    public function destroy(Request $request, int $id, string $attachmentKey): Response
+    {
+        return DB::transaction(function () use ($request, $id, $attachmentKey) {
+            $audit = AuditAssignment::whereKey($id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $audit->auditor_id === (int) $request->user()->id, 403);
+            if (! $audit->isEditableByAuditor()) {
+                throw ValidationException::withMessages(['audit' => 'Evidence cannot be removed from a finalized audit.']);
+            }
+            $query = $audit->evidenceFiles();
+            $file = ctype_digit($attachmentKey) ? $query->whereKey($attachmentKey)->first() : $query->where('client_attachment_id', $attachmentKey)->first();
+            if (! $file) {
+                return response()->noContent();
+            }
+            if (Storage::disk('local')->exists($file->stored_path)) {
+                abort_unless(Storage::disk('local')->delete($file->stored_path), 503, 'Evidence could not be removed. Please try again.');
+            }
+            AuditProvenanceLog::record($audit, 'evidence_removed', $request->user(), 'Auditor removed an editable attachment.', ['file_id' => $file->id, 'filename' => $file->original_name], null);
+            $file->delete();
+
+            return response()->noContent();
+        });
+    }
+
     /**
      * Removes EXIF metadata from uploaded images using GD to safeguard privacy.
      */
@@ -251,6 +291,7 @@ class AuditEvidenceController extends Controller
         return [
             'id' => $f->id,
             'question_id' => $f->question_id,
+            'client_attachment_id' => $f->client_attachment_id,
             'original_name' => $f->original_name,
             'mime_type' => $f->mime_type,
             'size_bytes' => $f->size_bytes,
