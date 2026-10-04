@@ -23,6 +23,24 @@ use Illuminate\Validation\ValidationException;
 
 class FacultyAuditController extends Controller
 {
+    private function isPublishedReport(AuditAssignment $audit): bool
+    {
+        return in_array($audit->status, [
+            AuditAssignmentStatus::Approved,
+            AuditAssignmentStatus::FacultyResponded,
+            AuditAssignmentStatus::ActionPlanActive,
+            AuditAssignmentStatus::Closed,
+        ], true);
+    }
+
+    private function administratorsFor(AuditAssignment $audit): \Illuminate\Support\Collection
+    {
+        $departmentId = $audit->section?->course?->department_id;
+
+        return User::where('role', UserRole::Admin)->where('is_active', true)->get()
+            ->filter(fn (User $user) => $user->canAccessDepartment($departmentId));
+    }
+
     /**
      * Normalizes the incoming answers array into qId-keyed maps for
      * answers_json and comments_json. The optional top-level
@@ -36,7 +54,7 @@ class FacultyAuditController extends Controller
         $formattedAnswers = [];
         $formattedComments = [];
         foreach ($submittedAnswers as $answer) {
-            $formattedAnswers[(string) $answer['question_id']] = $answer['value'];
+            $formattedAnswers[(string) $answer['question_id']] = $answer['value'] ?? null;
             $comment = $answer['comment'] ?? null;
             if (is_string($comment) && trim($comment) !== '') {
                 $formattedComments[(string) $answer['question_id']] = trim($comment);
@@ -115,7 +133,7 @@ class FacultyAuditController extends Controller
         $userId = $request->user()->id;
 
         // Auditor can view their assignment; Auditee can view once approved.
-        if ($audit->auditor_id !== $userId && ($audit->auditee_id !== $userId || $audit->status !== AuditAssignmentStatus::Approved)) {
+        if ($audit->auditor_id !== $userId && ($audit->auditee_id !== $userId || ! $this->isPublishedReport($audit))) {
             return response()->json(['message' => 'Forbidden. Access restricted.'], 403);
         }
 
@@ -174,16 +192,16 @@ class FacultyAuditController extends Controller
     public function auditForm(Request $request): JsonResponse
     {
         if ($request->filled('audit_id')) {
+            $request->validate(['audit_id' => ['integer', 'min:1']]);
             $audit = AuditAssignment::with('formVersion')->find($request->input('audit_id'));
-            if ($audit && $audit->form_version_id && $audit->formVersion) {
-                // The frozen questionnaire is assignment-scoped data: only the
-                // assigned auditor (or the auditee of an approved audit) may
-                // read it, mirroring the show() authorization.
-                $userId = $request->user()->id;
-                if ($audit->auditor_id !== $userId && ($audit->auditee_id !== $userId || $audit->status !== AuditAssignmentStatus::Approved)) {
-                    return response()->json(['message' => 'Forbidden. Access restricted.'], 403);
-                }
-
+            if (! $audit) {
+                return response()->json(['message' => 'Audit assignment not found.'], 404);
+            }
+            $userId = $request->user()->id;
+            if ($audit->auditor_id !== $userId && ($audit->auditee_id !== $userId || ! $this->isPublishedReport($audit))) {
+                return response()->json(['message' => 'Forbidden. Access restricted.'], 403);
+            }
+            if ($audit->form_version_id && $audit->formVersion) {
                 return response()->json([
                     'data' => $audit->formVersion->getQuestions(),
                     'form_version' => [
@@ -262,28 +280,6 @@ class FacultyAuditController extends Controller
             $request->input('recommendations'),
         );
 
-        // Compute total_score = (average of all scorable [rating + yes_no]) * 20
-        $activeQuestions = Question::where('form_type', FormType::FacultyAudit)
-            ->where('is_active', true)
-            ->get()
-            ->keyBy('id');
-
-        $scorableValues = [];
-
-        foreach ($formattedAnswers as $qId => $value) {
-            $question = $activeQuestions->get((int) $qId);
-            if (! $question) {
-                continue;
-            }
-
-            if ($question->question_type === QuestionType::Rating && is_numeric($value)) {
-                $scorableValues[] = (float) $value; // 1 to 5
-            } elseif ($question->question_type === QuestionType::YesNo) {
-                $isYes = in_array($value, [true, 1, '1', 'yes', 'true'], true);
-                $scorableValues[] = $isYes ? 5.0 : 0.0; // Scaled to 5-point scale
-            }
-        }
-
         // Lock the row and re-check finality inside the transaction: a draft
         // being saved concurrently, or an admin approving concurrently, can
         // never interleave with this submission (prevents an approved audit
@@ -335,7 +331,7 @@ class FacultyAuditController extends Controller
         // Notifications fire after commit — they must never roll back with
         // the transaction, and never notify about an uncommitted state.
         NotificationService::sendMany(
-            User::where('role', UserRole::Admin)->where('is_active', true)->get(),
+            $this->administratorsFor($audit),
             'audit',
             'Audit submitted for review',
             "{$audit->auditor?->name} submitted a peer audit of {$audit->auditee?->name}".($audit->total_score !== null ? " (score: {$audit->total_score}/100)" : '').'. Awaiting your decision in the portal.',
@@ -567,7 +563,7 @@ class FacultyAuditController extends Controller
         ]);
 
         NotificationService::sendMany(
-            User::where('role', UserRole::Admin)->where('is_active', true)->get(),
+            $this->administratorsFor($audit),
             'audit',
             'Faculty Response Received',
             "{$request->user()->name} submitted a formal response to Audit #{$audit->id}.",
@@ -632,56 +628,56 @@ class FacultyAuditController extends Controller
             'follow_up_note' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
 
-        $audit = AuditAssignment::whereKey($id)->first();
-        if (! $audit) {
-            abort(404, 'Audit report not found.');
-        }
+        $action = DB::transaction(function () use ($request, $id, $actionId, $validated) {
+            $audit = AuditAssignment::whereKey($id)->lockForUpdate()->first();
+            if (! $audit) {
+                abort(404, 'Audit report not found.');
+            }
 
-        $action = $audit->improvementActions()->whereKey($actionId)->first();
-        if (! $action) {
-            abort(404, 'Improvement action not found.');
-        }
+            $action = $audit->improvementActions()->whereKey($actionId)->lockForUpdate()->first();
+            if (! $action) {
+                abort(404, 'Improvement action not found.');
+            }
 
-        $userId = (int) $request->user()->id;
-        if ((int) $audit->auditee_id !== $userId && (int) $action->owner_id !== $userId) {
-            abort(403, 'Unauthorized. Only the auditee or action owner can update this action item.');
-        }
+            $userId = (int) $request->user()->id;
+            if ((int) $audit->auditee_id !== $userId && (int) $action->owner_id !== $userId) {
+                abort(403, 'Unauthorized. Only the auditee or action owner can update this action item.');
+            }
 
-        if ($action->status === 'closed') {
-            throw ValidationException::withMessages([
-                'status' => 'Closed improvement actions cannot be edited.',
-            ]);
-        }
+            if ($audit->status === AuditAssignmentStatus::Closed || $action->status === 'closed') {
+                throw ValidationException::withMessages([
+                    'status' => 'Closed improvement actions cannot be edited.',
+                ]);
+            }
 
-        $beforeState = [
-            'status' => $action->status,
-            'follow_up_note' => $action->follow_up_note,
-        ];
-
-        $action->update(array_filter([
-            'status' => $validated['status'] ?? null,
-            'follow_up_note' => array_key_exists('follow_up_note', $validated) ? $validated['follow_up_note'] : null,
-        ], fn ($v) => $v !== null));
-
-        AuditProvenanceLog::record(
-            $audit,
-            'improvement_action_progress_updated',
-            $request->user(),
-            "Faculty updated action item #{$action->id}: status={$action->status}",
-            $beforeState,
-            [
-                'action_id' => $action->id,
+            $beforeState = [
                 'status' => $action->status,
                 'follow_up_note' => $action->follow_up_note,
-                'updated_by' => $request->user()->id,
-            ]
-        );
+            ];
 
-        ActivityLogger::log($audit, 'audit.action_progress_updated', [
-            'action_id' => $action->id,
-            'status' => $action->status,
-            'user' => $request->user()->name,
-        ]);
+            $action->update($validated);
+
+            AuditProvenanceLog::record(
+                $audit,
+                'improvement_action_progress_updated',
+                $request->user(),
+                "Faculty updated action item #{$action->id}: status={$action->status}",
+                $beforeState,
+                [
+                    'action_id' => $action->id,
+                    'status' => $action->status,
+                    'follow_up_note' => $action->follow_up_note,
+                    'updated_by' => $request->user()->id,
+                ]
+            );
+
+            ActivityLogger::log($audit, 'audit.action_progress_updated', [
+                'action_id' => $action->id,
+                'status' => $action->status,
+                'user' => $request->user()->name,
+            ]);
+            return $action;
+        });
 
         return response()->json([
             'message' => 'Action plan updated.',

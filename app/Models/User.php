@@ -20,6 +20,7 @@ class User extends Authenticatable
         'password',
         'role',
         'department_id',
+        'is_central_qa',
         'is_active',
         'mfa_secret',
         'mfa_recovery_codes',
@@ -33,16 +34,33 @@ class User extends Authenticatable
         'mfa_recovery_codes',
     ];
 
+    protected $appends = ['has_consented', 'enrolled_term'];
+
+    public function getHasConsentedAttribute(): bool
+    {
+        return $this->consented_at !== null
+            && $this->consent_version === config('fasre.student_consent_version', 'student-review-v1');
+    }
+
+    public function getEnrolledTermAttribute(): ?string
+    {
+        return $this->isStudent()
+            ? $this->studentEnrollments()->with('section')->latest('id')->first()?->section?->term
+            : null;
+    }
+
     protected function casts(): array
     {
         return [
             'role' => UserRole::class,
             'is_active' => 'boolean',
+            'is_central_qa' => 'boolean',
             'password' => 'hashed',
             'mfa_secret' => 'encrypted',
             'mfa_recovery_codes' => 'array',
             'mfa_enabled_at' => 'datetime',
             'mfa_required' => 'boolean',
+            'consented_at' => 'datetime',
         ];
     }
 
@@ -70,7 +88,7 @@ class User extends Authenticatable
 
     public function isCentralQa(): bool
     {
-        return $this->isAdmin() && $this->department_id === null;
+        return $this->isAdmin() && $this->is_central_qa && $this->department_id === null;
     }
 
     public function canAccessDepartment(?int $deptId): bool

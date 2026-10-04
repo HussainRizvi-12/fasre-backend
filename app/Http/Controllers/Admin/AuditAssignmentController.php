@@ -366,16 +366,15 @@ class AuditAssignmentController extends Controller
             'follow_up_note' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
 
-        $assignment = AuditAssignment::whereKey($id)->first();
-        if (! $assignment) {
-            abort(404, 'Audit assignment not found.');
-        }
+        [$assignment, $action] = DB::transaction(function () use ($id, $validated, $request) {
+            $assignment = AuditAssignment::whereKey($id)->lockForUpdate()->firstOrFail();
+            if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
+                abort(403, 'Forbidden. Access restricted by department scope.');
+            }
+            if (! in_array($assignment->status, [AuditAssignmentStatus::Approved, AuditAssignmentStatus::FacultyResponded, AuditAssignmentStatus::ActionPlanActive], true)) {
+                abort(422, 'Improvement actions may only be created on approved, faculty-responded, or action-plan-active audits.');
+            }
 
-        if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
-            abort(403, 'Forbidden. Access restricted by department scope.');
-        }
-
-        $action = DB::transaction(function () use ($assignment, $validated, $request) {
             $action = $assignment->improvementActions()->create([
                 'finding' => $validated['finding'],
                 'agreed_action' => $validated['agreed_action'],
@@ -408,7 +407,7 @@ class AuditAssignmentController extends Controller
                 ]
             );
 
-            return $action;
+            return [$assignment, $action];
         });
 
         return response()->json([
@@ -441,28 +440,25 @@ class AuditAssignmentController extends Controller
             'follow_up_note' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
 
-        $assignment = AuditAssignment::whereKey($id)->first();
-        if (! $assignment) {
-            abort(404, 'Audit assignment not found.');
-        }
-
-        if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
-            abort(403, 'Forbidden. Access restricted by department scope.');
-        }
-
-        $action = $assignment->improvementActions()->whereKey($actionId)->first();
-        if (! $action) {
-            abort(404, 'Improvement action not found.');
-        }
-
-        $beforeState = [
-            'status' => $action->status,
-            'follow_up_note' => $action->follow_up_note,
-            'due_date' => $action->due_date?->toDateString(),
-        ];
-
-        DB::transaction(function () use ($action, $assignment, $validated, $request, $beforeState) {
-            $updates = array_filter($validated, fn ($v) => $v !== null);
+        [$assignment, $action] = DB::transaction(function () use ($id, $actionId, $validated, $request) {
+            $assignment = AuditAssignment::whereKey($id)->lockForUpdate()->firstOrFail();
+            if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
+                abort(403, 'Forbidden. Access restricted by department scope.');
+            }
+            if ($assignment->status === AuditAssignmentStatus::Closed) {
+                abort(422, 'Closed audits cannot have their improvement actions edited.');
+            }
+            $action = $assignment->improvementActions()->whereKey($actionId)->lockForUpdate()->firstOrFail();
+            if ($action->status === 'closed') {
+                abort(422, 'Closed improvement actions cannot be edited.');
+            }
+            $beforeState = [
+                'status' => $action->status,
+                'follow_up_note' => $action->follow_up_note,
+                'due_date' => $action->due_date?->toDateString(),
+            ];
+            // Validated keys distinguish omission from an explicit nullable value.
+            $updates = $validated;
             if (isset($validated['status']) && $validated['status'] === 'closed' && $action->status !== 'closed') {
                 $updates['closed_by'] = $request->user()->id;
                 $updates['closed_at'] = now();
@@ -475,7 +471,17 @@ class AuditAssignmentController extends Controller
             if ($openActionsCount === 0 && $assignment->status === AuditAssignmentStatus::ActionPlanActive) {
                 $assignment->update([
                     'status' => AuditAssignmentStatus::Closed,
+                    'closed_by' => $request->user()->id,
+                    'closed_at' => now(),
                 ]);
+                AuditProvenanceLog::record(
+                    $assignment,
+                    'audit_closed',
+                    $request->user(),
+                    'All improvement actions closed by QA.',
+                    ['status' => AuditAssignmentStatus::ActionPlanActive->value],
+                    ['status' => AuditAssignmentStatus::Closed->value, 'closed_by' => $assignment->closed_by, 'closed_at' => $assignment->closed_at?->toIso8601String()]
+                );
             }
 
             AuditProvenanceLog::record(
@@ -493,6 +499,7 @@ class AuditAssignmentController extends Controller
                     'audit_status' => $assignment->status->value,
                 ]
             );
+            return [$assignment, $action];
         });
 
         return response()->json([

@@ -40,6 +40,7 @@ class DemoSeeder extends Seeder
             'email' => 'admin@fasre.test',
             'password' => $password,
             'role' => UserRole::Admin,
+            'is_central_qa' => true,
             'is_active' => true,
         ]);
 

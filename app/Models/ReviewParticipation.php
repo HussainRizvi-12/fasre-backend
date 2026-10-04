@@ -12,6 +12,7 @@ class ReviewParticipation extends Model
         'section_id',
         'student_id',
         'submitted_at',
+        'confirmation_code',
     ];
 
     protected function casts(): array

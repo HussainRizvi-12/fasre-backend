@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
@@ -18,6 +19,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ReviewResponse extends Model
 {
+    // A random integer preserves the existing bigint schema without exposing
+    // submission order alongside the identity-bearing participation table.
+    public $incrementing = false;
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $response) {
+            if ($response->getKey() === null) {
+                do {
+                    $id = random_int(1, 9007199254740991);
+                } while (static::whereKey($id)->exists());
+                $response->setAttribute($response->getKeyName(), $id);
+            }
+        });
+    }
+
     /**
      * Disable Eloquent automatic timestamps so created_at/updated_at
      * are never written or managed on this table.
@@ -38,6 +55,17 @@ class ReviewResponse extends Model
             'answers_json' => 'array',
             'submitted_at' => 'datetime',
         ];
+    }
+
+    public function scopeReferencingQuestion(Builder $query, int $questionId): Builder
+    {
+        // PostgreSQL interprets a numeric -> operand as an array index.
+        // Our answer keys are numeric strings in a JSON object, not indexes.
+        if ($query->getConnection()->getDriverName() === 'pgsql') {
+            return $query->whereRaw('jsonb_extract_path(answers_json::jsonb, ?) IS NOT NULL', [(string) $questionId]);
+        }
+
+        return $query->whereNotNull("answers_json->{$questionId}");
     }
 
     public function reviewWindow(): BelongsTo

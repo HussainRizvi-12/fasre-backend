@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\FormType;
 use App\Http\Controllers\Controller;
+use App\Services\AuditScoringService;
 use App\Models\AuditProvenanceLog;
 use App\Models\FormVersion;
 use App\Models\Question;
@@ -112,10 +113,7 @@ class FormVersionController extends Controller
 
         $defaultScoringRules = [
             'bands' => [
-                ['key' => 'commendable', 'min' => 90.0, 'max' => 100.0, 'label' => 'Commendable', 'outcome' => 'exceedsStandard', 'color' => 'success', 'requires_action_plan' => false],
-                ['key' => 'satisfactory', 'min' => 75.0, 'max' => 89.99, 'label' => 'Satisfactory', 'outcome' => 'meetsStandard', 'color' => 'info', 'requires_action_plan' => false],
-                ['key' => 'developmental', 'min' => 60.0, 'max' => 74.99, 'label' => 'Developmental', 'outcome' => 'needsImprovement', 'color' => 'warning', 'requires_action_plan' => true],
-                ['key' => 'critical_concern', 'min' => 0.0, 'max' => 59.99, 'label' => 'Critical Concern', 'outcome' => 'needsImprovement', 'color' => 'danger', 'requires_action_plan' => true],
+                ...AuditScoringService::DEFAULT_BANDS,
             ],
         ];
 

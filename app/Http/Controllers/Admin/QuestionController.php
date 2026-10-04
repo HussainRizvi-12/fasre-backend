@@ -63,6 +63,14 @@ class QuestionController extends Controller
             ], 422);
         }
 
+        $hasUnversionedHistory = ReviewResponse::whereHas('reviewWindow', fn ($q) => $q->whereNull('form_version_id'))
+            ->referencingQuestion($question->id)->exists();
+        if ($hasUnversionedHistory) {
+            return response()->json([
+                'message' => 'This question is used in unversioned historical results. Publish a frozen historical form before changing it, or create a new question.',
+            ], 422);
+        }
+
         $question->update($request->validated());
 
         return response()->json([
@@ -84,7 +92,7 @@ class QuestionController extends Controller
             ], 422);
         }
 
-        $hasResponses = ReviewResponse::whereNotNull("answers_json->{$question->id}")->exists();
+        $hasResponses = ReviewResponse::referencingQuestion($question->id)->exists();
         if ($hasResponses) {
             return response()->json([
                 'message' => 'Cannot delete question with existing recorded responses. Deactivate the question instead.',

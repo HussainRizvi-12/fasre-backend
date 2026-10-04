@@ -36,20 +36,6 @@ class ReviewResultsController extends Controller
             return response()->json(['message' => 'Review window not found.'], 404);
         }
 
-        // Controlled release gate: Live answer totals cannot be queried while window is active
-        if ($window->status === ReviewWindowStatus::Active || $window->status === ReviewWindowStatus::Draft) {
-            return response()->json([
-                'review_window' => [
-                    'id' => $window->id,
-                    'title' => $window->title,
-                    'status' => $window->status->value,
-                ],
-                'data' => [],
-                'is_locked' => true,
-                'message' => 'Results are locked during active review collection to safeguard confidentiality. Full aggregates are released upon cycle closure and authorized publication.',
-            ]);
-        }
-
         // Department isolation check for delegated administrators
         if ($request->user()->department_id) {
             $userDeptId = $request->user()->department_id;
@@ -62,6 +48,20 @@ class ReviewResultsController extends Controller
             if (! $hasEligibleDeptSection && $window->department_id !== $userDeptId) {
                 return response()->json(['message' => 'Forbidden. You do not have permission to view results outside your department.'], 403);
             }
+        }
+
+        // Controlled release gate: Live answer totals cannot be queried while window is active
+        if ($window->status === ReviewWindowStatus::Active || $window->status === ReviewWindowStatus::Draft) {
+            return response()->json([
+                'review_window' => [
+                    'id' => $window->id,
+                    'title' => $window->title,
+                    'status' => $window->status->value,
+                ],
+                'data' => [],
+                'is_locked' => true,
+                'message' => 'Results are locked during active review collection to safeguard confidentiality. Full aggregates are released upon cycle closure and authorized publication.',
+            ]);
         }
 
         $sectionsQuery = Section::with(['course.department', 'facultyAssignments.faculty']);

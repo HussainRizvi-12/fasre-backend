@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Symfony\Component\HttpFoundation\Response;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthenticateFromSessionCookie
 {
@@ -32,6 +33,19 @@ class AuthenticateFromSessionCookie
                     return response()->json([
                         'message' => 'Invalid or tampered session cookie.',
                     ], 401)->withoutCookie('fasre_session');
+                }
+
+                // A revoked/expired cookie must not prevent a fresh login. Keep
+                // origin validation even when discarding the stale session.
+                $token = PersonalAccessToken::findToken($sessionToken);
+                if ($request->is('api/login') && (! $token || ($token->expires_at && $token->expires_at->isPast()))) {
+                    $origin = $request->header('Origin');
+                    if ($origin && ! in_array($origin, (array) config('cors.allowed_origins', []), true)) {
+                        return response()->json(['message' => 'Cross-origin request rejected from disallowed origin.'], 403);
+                    }
+                    $request->cookies->remove('fasre_session');
+                    $request->cookies->remove('fasre_csrf');
+                    return $next($request);
                 }
 
                 // CSRF Protection for state-changing cookie-authenticated requests

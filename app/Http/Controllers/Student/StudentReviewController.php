@@ -22,6 +22,21 @@ use Illuminate\Support\Str;
 
 class StudentReviewController extends Controller
 {
+    public function consent(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'accepted' => ['required', 'boolean'],
+            'version' => ['required', 'string', 'in:'.config('fasre.student_consent_version', 'student-review-v1')],
+        ]);
+        $user = $request->user();
+        $user->forceFill([
+            'consent_version' => $validated['accepted'] ? $validated['version'] : null,
+            'consented_at' => $validated['accepted'] ? now() : null,
+        ])->save();
+
+        return response()->json(['data' => $user->fresh(), 'message' => 'Consent preference recorded.']);
+    }
+
     /**
      * 4.1 GET /api/student/enrolled-sections
      * Returns the authenticated student's enrolled sections with review status.
@@ -264,6 +279,7 @@ class StudentReviewController extends Controller
 
         // Generate non-reversible random token (never derived from student ID)
         $pseudonymToken = (string) Str::uuid();
+        $confirmationCode = 'FASRE-'.now()->year.'-'.strtoupper(Str::random(16));
 
         // Format answers for JSON storage (key-by question_id and list)
         $formattedAnswers = [];
@@ -272,7 +288,7 @@ class StudentReviewController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($windowId, $sectionId, $student, $pseudonymToken, $formattedAnswers) {
+            DB::transaction(function () use ($windowId, $sectionId, $student, $pseudonymToken, $formattedAnswers, $confirmationCode) {
                 // 0. Concurrency serialization: lock window row to serialize against admin closure
                 $lockedWindow = ReviewWindow::whereKey($windowId)->lockForUpdate()->first();
                 if (! $lockedWindow || $lockedWindow->status !== ReviewWindowStatus::Active || ! now()->between($lockedWindow->starts_at, $lockedWindow->ends_at)) {
@@ -293,6 +309,7 @@ class StudentReviewController extends Controller
                     'review_window_id' => $windowId,
                     'section_id' => $sectionId,
                     'student_id' => $student->id,
+                    'confirmation_code' => $confirmationCode,
                     'submitted_at' => now(),
                 ]);
             });
@@ -302,9 +319,6 @@ class StudentReviewController extends Controller
             ], 409);
         }
 
-        $year = now()->year;
-        $confirmationCode = 'FASRE-'.$year.'-'.strtoupper(Str::random(4)).'-'.strtoupper(Str::random(4));
-
         return response()->json([
             'message' => 'Review submitted successfully.',
             'data' => [
@@ -312,6 +326,28 @@ class StudentReviewController extends Controller
                 'submitted_at' => now()->toIso8601String(),
             ],
         ], 201);
+    }
+
+    public function submissions(Request $request): JsonResponse
+    {
+        $receipts = ReviewParticipation::with([
+            'reviewWindow' => fn ($query) => $query->withTrashed(),
+            'section' => fn ($query) => $query->withTrashed()->with([
+                'course' => fn ($course) => $course->withTrashed(),
+                'facultyAssignments.faculty',
+            ]),
+        ])->where('student_id', $request->user()->id)->orderByDesc('id')->get();
+
+        return response()->json(['data' => $receipts->map(fn ($receipt) => [
+            'id' => $receipt->id,
+            'review_window_id' => $receipt->review_window_id,
+            'section_id' => $receipt->section_id,
+            'course_code' => $receipt->section?->course?->code,
+            'course_title' => $receipt->section?->course?->title,
+            'faculty_name' => $receipt->section?->facultyAssignments?->firstWhere('is_primary', true)?->faculty?->name,
+            'term' => $receipt->reviewWindow?->term ?? $receipt->section?->term,
+            'confirmation_code' => $receipt->confirmation_code,
+        ])]);
     }
 
     /**

@@ -98,7 +98,7 @@ class FacultyAuditApiTest extends TestCase
         $response = $this->withToken($token)
             ->postJson("/api/faculty/audits/{$this->auditAssignment->id}/save-draft", [
                 'answers' => [
-                    ['question_id' => 5, 'value' => 4],
+                    ['question_id' => Question::where('form_type', FormType::FacultyAudit)->firstOrFail()->id, 'value' => 4],
                 ],
             ]);
 

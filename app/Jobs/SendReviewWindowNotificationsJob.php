@@ -38,14 +38,10 @@ class SendReviewWindowNotificationsJob implements ShouldQueue
             return;
         }
 
-        // Get student user IDs to notify
-        // If snapshot roster exists, notify those enrolled students; else fallback to all active students
-        $studentIds = $window->roster()->pluck('student_id')->unique();
-        if ($studentIds->isEmpty()) {
-            $studentIds = User::where('role', 'student')
-                ->where('is_active', true)
-                ->pluck('id');
-        }
+        // An empty frozen roster must never become a campus-wide broadcast.
+        $studentIds = $window->roster()->where('status', 'eligible')
+            ->whereHas('student', fn ($q) => $q->where('role', 'student')->where('is_active', true))
+            ->pluck('student_id')->unique();
 
         $title = 'Review window is now open';
         $body = "'{$window->title}' is now open. Submit your confidential course evaluations before it closes on {$window->ends_at->toFormattedDateString()}.";

@@ -33,6 +33,7 @@ class SaveAuditDraftRequest extends FormRequest
         return [
             'answers' => ['nullable', 'array', 'max:100'],
             'answers.*.question_id' => ['required_with:answers', 'integer'],
+            'answers.*.comment' => ['nullable', 'string', 'max:5000'],
             // Scalar-only + bounded length (see SubmitStudentReviewRequest).
             'answers.*.value' => ['nullable', function (string $attribute, mixed $value, \Closure $fail) {
                 if (is_array($value) || is_object($value)) {

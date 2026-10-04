@@ -160,7 +160,7 @@ class AsyncNotificationTest extends TestCase
         }
     }
 
-    public function test_job_falls_back_to_all_active_students_if_roster_is_empty(): void
+    public function test_empty_roster_does_not_notify_unrelated_students(): void
     {
         ReviewWindow::where('status', ReviewWindowStatus::Active)
             ->update(['status' => ReviewWindowStatus::Closed]);
@@ -186,7 +186,7 @@ class AsyncNotificationTest extends TestCase
         $job->handle();
 
         $notificationCount = AppNotification::where('type', 'window')->count();
-        $this->assertEquals($activeStudentCount, $notificationCount);
+        $this->assertEquals(0, $notificationCount);
     }
 
     public function test_bulk_insert_in_app_service(): void

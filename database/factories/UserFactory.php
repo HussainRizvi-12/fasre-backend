@@ -11,6 +11,17 @@ use Illuminate\Support\Facades\Hash;
  */
 class UserFactory extends Factory
 {
+    public function configure(): static
+    {
+        // Test/demo fixtures explicitly model legacy central administrators;
+        // production account creation does not infer grants from null scope.
+        return $this->afterMaking(function (User $user) {
+            if (! array_key_exists('is_central_qa', $user->getAttributes())) {
+                $user->is_central_qa = $user->isAdmin() && $user->department_id === null;
+            }
+        });
+    }
+
     /**
      * The current password being used by the factory.
      */

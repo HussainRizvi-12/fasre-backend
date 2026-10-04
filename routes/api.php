@@ -144,9 +144,11 @@ $registerApiRoutes = function () {
         ->middleware(['auth:sanctum', EnsureAccountIsActive::class, EnsureUserIsStudent::class])
         ->group(function () {
             Route::get('/enrolled-sections', [StudentReviewController::class, 'enrolledSections']);
+            Route::post('/consent', [StudentReviewController::class, 'consent']);
             Route::get('/review-windows/active', [StudentReviewController::class, 'activeReviewWindow']);
             Route::get('/review-form', [StudentReviewController::class, 'reviewForm']);
             Route::post('/reviews', [StudentReviewController::class, 'store']);
+            Route::get('/submissions', [StudentReviewController::class, 'submissions']);
             Route::get('/review-results/published', [StudentReviewController::class, 'publishedResults']);
         });
 

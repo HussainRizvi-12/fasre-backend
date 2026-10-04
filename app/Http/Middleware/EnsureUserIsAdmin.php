@@ -30,6 +30,10 @@ class EnsureUserIsAdmin
             abort(403, 'Your account has been deactivated.');
         }
 
+        if (! $request->user()->isCentralQa() && $request->user()->department_id === null) {
+            abort(403, 'Your administrator account needs a department assignment or an explicit Central QA grant.');
+        }
+
         return $next($request);
     }
 }

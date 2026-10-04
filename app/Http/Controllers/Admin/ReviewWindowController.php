@@ -173,7 +173,10 @@ class ReviewWindowController extends Controller
                     ->where('is_published', true)
                     ->latest()
                     ->first();
-                $window->form_version_id = $latestVersion?->id;
+                $window->form_version_id = ($latestVersion ?? FormVersion::snapshotStudentReview($window->id, $request->user()->id))?->id;
+                if (! $window->form_version_id) {
+                    abort(422, 'A review cycle needs at least one active question before it can be opened.');
+                }
             }
 
             try {
@@ -295,7 +298,9 @@ class ReviewWindowController extends Controller
 
         // Notify students
         NotificationService::sendMany(
-            User::where('role', 'student')->where('is_active', true)->get(),
+            User::where('role', 'student')->where('is_active', true)
+                ->whereIn('id', $publishedWindow->rosterEntries()->where('status', 'eligible')->select('student_id'))
+                ->get(),
             'result',
             'Evaluation results published',
             "Aggregated results for '{$publishedWindow->title}' are now available.",

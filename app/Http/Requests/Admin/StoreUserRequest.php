@@ -16,6 +16,9 @@ class StoreUserRequest extends FormRequest
         }
 
         // Only Central QA can create an admin account or grant central QA privileges
+        if ($this->boolean('is_central_qa') && ! $user->isCentralQa()) {
+            return false;
+        }
         if ($this->input('role') === UserRole::Admin->value || $this->input('role') === 'admin') {
             if (! $user->isCentralQa()) {
                 return false;
@@ -40,6 +43,7 @@ class StoreUserRequest extends FormRequest
             'password' => ['required', 'string', 'min:8'],
             'role' => ['required', Rule::enum(UserRole::class)],
             'department_id' => ['nullable', 'integer', 'exists:departments,id'],
+            'is_central_qa' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

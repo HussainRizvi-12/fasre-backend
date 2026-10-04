@@ -25,6 +25,7 @@ class ResultsAggregationAndReportTest extends TestCase
     protected User $student;
     protected ReviewWindow $publishedWindow;
     protected Section $section;
+    protected array $questionIds;
 
     protected function setUp(): void
     {
@@ -34,6 +35,7 @@ class ResultsAggregationAndReportTest extends TestCase
         $this->admin = User::where('role', UserRole::Admin)->first();
         $this->student = User::where('role', UserRole::Student)->first();
         $this->section = Section::first();
+        $this->questionIds = Question::where('form_type', FormType::StudentReview)->orderBy('sort_order')->pluck('id')->all();
 
         // Ensure student is enrolled in section
         StudentEnrollment::firstOrCreate([
@@ -59,7 +61,7 @@ class ResultsAggregationAndReportTest extends TestCase
                 'review_window_id' => $this->publishedWindow->id,
                 'section_id' => $this->section->id,
                 'pseudonym_token' => (string) Str::uuid(),
-                'answers_json' => ['1' => 4, '2' => true, '3' => 5, '4' => 'Good'],
+                'answers_json' => [(string) $this->questionIds[0] => 4, (string) $this->questionIds[1] => true, (string) $this->questionIds[2] => 5, (string) $this->questionIds[3] => 'Good'],
                 'submitted_at' => now(),
             ]);
         }
@@ -78,7 +80,7 @@ class ResultsAggregationAndReportTest extends TestCase
             'review_window_id' => $this->publishedWindow->id,
             'section_id' => $this->section->id,
             'pseudonym_token' => (string) Str::uuid(),
-            'answers_json' => ['1' => 5, '2' => true, '3' => 5, '4' => 'Great'],
+            'answers_json' => [(string) $this->questionIds[0] => 5, (string) $this->questionIds[1] => true, (string) $this->questionIds[2] => 5, (string) $this->questionIds[3] => 'Great'],
             'submitted_at' => now(),
         ]);
 
@@ -112,10 +114,10 @@ class ResultsAggregationAndReportTest extends TestCase
                 'section_id' => $this->section->id,
                 'pseudonym_token' => (string) Str::uuid(),
                 'answers_json' => [
-                    '1' => $ratingsQ1[$i],
-                    '2' => $yesNosQ2[$i],
-                    '3' => 5,
-                    '4' => "Feedback comment {$i}",
+                    (string) $this->questionIds[0] => $ratingsQ1[$i],
+                    (string) $this->questionIds[1] => $yesNosQ2[$i],
+                    (string) $this->questionIds[2] => 5,
+                    (string) $this->questionIds[3] => "Feedback comment {$i}",
                 ],
                 'submitted_at' => now(),
             ]);
@@ -128,15 +130,15 @@ class ResultsAggregationAndReportTest extends TestCase
         $questions = collect($response->json('data.0.questions'))->keyBy('question_id');
 
         // Verify Question #1 (Rating)
-        $q1 = $questions->get(1);
+        $q1 = $questions->get($this->questionIds[0]);
         $this->assertEquals(4.0, $q1['average']);
 
         // Verify Question #2 (Yes/No)
-        $q2 = $questions->get(2);
+        $q2 = $questions->get($this->questionIds[1]);
         $this->assertEquals(80.0, $q2['percentage_yes']);
 
         // Verify Question #4 (Text / Textarea: individual text is NEVER exposed)
-        $q4 = $questions->get(4);
+        $q4 = $questions->get($this->questionIds[3]);
         $this->assertEquals(5, $q4['submission_count']);
         $this->assertArrayNotHasKey('answers', $q4);
     }
@@ -151,7 +153,7 @@ class ResultsAggregationAndReportTest extends TestCase
                 'review_window_id' => $this->publishedWindow->id,
                 'section_id' => $this->section->id,
                 'pseudonym_token' => (string) Str::uuid(),
-                'answers_json' => ['1' => 5, '2' => true, '3' => 5, '4' => 'Excellent'],
+                'answers_json' => [(string) $this->questionIds[0] => 5, (string) $this->questionIds[1] => true, (string) $this->questionIds[2] => 5, (string) $this->questionIds[3] => 'Excellent'],
                 'submitted_at' => now(),
             ]);
         }
@@ -229,11 +231,11 @@ class ResultsAggregationAndReportTest extends TestCase
             'review_window_id' => $this->publishedWindow->id,
             'section_id' => $this->section->id,
             'pseudonym_token' => (string) Str::uuid(),
-            'answers_json' => ['1' => 5],
+            'answers_json' => [(string) $this->questionIds[0] => 5],
             'submitted_at' => now(),
         ]);
 
-        $question1 = Question::find(1);
+        $question1 = Question::findOrFail($this->questionIds[0]);
 
         $deleteRes = $this->withToken($adminToken)
             ->deleteJson("/api/admin/questions/{$question1->id}");

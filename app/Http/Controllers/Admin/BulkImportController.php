@@ -207,6 +207,12 @@ class BulkImportController extends Controller
 
                     continue;
                 }
+                $centralGrant = $role === 'admin' && in_array(strtolower($row['is_central_qa'] ?? ''), ['1', 'true', 'yes'], true);
+                if ($role === 'admin' && (($centralGrant && $departmentId !== null) || (! $centralGrant && $departmentId === null))) {
+                    $skipped++;
+                    $errors[] = "Line {$lineNo}: administrator accounts require a department_code or an explicit is_central_qa grant, never both.";
+                    continue;
+                }
                 $validation = Validator::make($row, [
                     'name' => ['required', 'string', 'max:255'],
                     'email' => ['required', 'email', 'max:255'],
@@ -233,6 +239,7 @@ class BulkImportController extends Controller
                     'password' => ($row['password'] ?? '') !== '' ? $row['password'] : Str::random(64),
                     'role' => $role,
                     'department_id' => $departmentId,
+                    'is_central_qa' => $centralGrant,
                     'is_active' => ! in_array(strtolower($row['is_active'] ?? ''), ['0', 'false', 'no'], true),
                 ]);
                 $created++;

@@ -19,6 +19,9 @@ class UpdateUserRequest extends FormRequest
         if ($caller->isCentralQa()) {
             return true;
         }
+        if ($this->exists('is_central_qa')) {
+            return false;
+        }
 
         $target = $this->route('user');
         if (! $target instanceof User) {
@@ -60,6 +63,7 @@ class UpdateUserRequest extends FormRequest
             'password' => ['sometimes', 'string', 'min:8'],
             'role' => ['sometimes', Rule::enum(UserRole::class)],
             'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
+            'is_central_qa' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

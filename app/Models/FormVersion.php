@@ -53,6 +53,30 @@ class FormVersion extends Model
         return $questions;
     }
 
+    public static function snapshotStudentReview(int $windowId, int $creatorId): ?self
+    {
+        $questions = Question::where('form_type', FormType::StudentReview)
+            ->where('is_active', true)->orderBy('sort_order')->get();
+        if ($questions->isEmpty()) {
+            return null;
+        }
+
+        return static::create([
+            'form_type' => FormType::StudentReview->value,
+            'version_code' => 'cycle-'.$windowId.'-'.\Illuminate\Support\Str::random(12),
+            'title' => 'Student review cycle '.$windowId,
+            'questions_json' => $questions->map(fn ($q) => [
+                'id' => $q->id,
+                'question_text' => $q->question_text,
+                'question_type' => $q->question_type->value,
+                'is_required' => $q->is_required,
+                'sort_order' => $q->sort_order,
+            ])->all(),
+            'is_published' => true,
+            'created_by' => $creatorId,
+        ]);
+    }
+
     /**
      * Finds question definition by its integer or string ID.
      */

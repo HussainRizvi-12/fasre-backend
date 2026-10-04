@@ -75,9 +75,10 @@ class UserController extends Controller
             $validated['department_id'] = $request->user()->department_id;
         }
 
+        $validated = $this->validateAdministrativeScope($validated);
         $user = User::create($validated);
 
-        ActivityLogger::log($user, 'user.created', ['name' => $user->name, 'role' => $user->role->value]);
+        ActivityLogger::log($user, 'user.created', ['name' => $user->name, 'role' => $user->role->value, 'is_central_qa' => $user->is_central_qa, 'department_id' => $user->department_id]);
 
         return response()->json([
             'data' => $user,
@@ -102,22 +103,23 @@ class UserController extends Controller
 
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
-        $validated = $request->validated();
+        $validated = $this->validateAdministrativeScope($request->validated(), $user);
         if ($request->user()->id === $user->id
             && ((array_key_exists('is_active', $validated) && ! $validated['is_active'])
                 || (isset($validated['role']) && $validated['role'] !== $user->role->value)
-                || (array_key_exists('department_id', $validated) && $validated['department_id'] != $user->department_id))) {
+                || (array_key_exists('department_id', $validated) && $validated['department_id'] != $user->department_id)
+                || (array_key_exists('is_central_qa', $validated) && $validated['is_central_qa'] != $user->is_central_qa))) {
             throw ValidationException::withMessages(['user' => 'You cannot remove your own administrative access. Ask another administrator to make this change.']);
         }
         DB::transaction(function () use ($user, $validated) {
             $user->update($validated);
-            if ($user->wasChanged(['password', 'email', 'role', 'department_id', 'is_active'])) {
+            if ($user->wasChanged(['password', 'email', 'role', 'department_id', 'is_central_qa', 'is_active'])) {
                 $user->tokens()->delete();
                 DB::table('mfa_enrollments')->where('user_id', $user->id)->delete();
             }
         });
 
-        ActivityLogger::log($user, 'user.updated', ['name' => $user->name]);
+        ActivityLogger::log($user, 'user.updated', ['name' => $user->name, 'is_central_qa' => $user->is_central_qa, 'department_id' => $user->department_id]);
 
         return response()->json([
             'data' => $user->fresh(),
@@ -157,5 +159,26 @@ class UserController extends Controller
         return response()->json([
             'message' => 'User deleted successfully.',
         ]);
+    }
+
+    private function validateAdministrativeScope(array $values, ?User $existing = null): array
+    {
+        $role = $values['role'] ?? $existing?->role?->value;
+        $central = $values['is_central_qa'] ?? $existing?->is_central_qa ?? false;
+        $departmentId = array_key_exists('department_id', $values) ? $values['department_id'] : $existing?->department_id;
+        if ($role !== 'admin') {
+            if (($values['is_central_qa'] ?? false)) {
+                throw ValidationException::withMessages(['is_central_qa' => 'Only administrator accounts can receive Central QA access.']);
+            }
+            if ($existing?->is_central_qa) $values['is_central_qa'] = false;
+            return $values;
+        }
+        if ($central && $departmentId !== null) {
+            throw ValidationException::withMessages(['department_id' => 'Central QA accounts must have no department restriction.']);
+        }
+        if (! $central && $departmentId === null) {
+            throw ValidationException::withMessages(['department_id' => 'Assign a department, or explicitly grant Central QA access.']);
+        }
+        return $values;
     }
 }
