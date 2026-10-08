@@ -22,7 +22,6 @@ use App\Http\Controllers\Faculty\FacultyAuditController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Student\StudentReviewController;
 use App\Http\Middleware\EnsureAccountIsActive;
-use App\Http\Middleware\EnsureAdminMfaEnrolled;
 use App\Http\Middleware\EnsureCentralQa;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\EnsureUserIsFaculty;
@@ -58,7 +57,7 @@ $registerApiRoutes = function () {
 
     // ── Admin APIs ──────────────────────────────────────────────────
     Route::prefix('admin')
-        ->middleware(['auth:sanctum', EnsureAccountIsActive::class, EnsureUserIsAdmin::class, EnsureAdminMfaEnrolled::class])
+        ->middleware(['auth:sanctum', EnsureAccountIsActive::class, EnsureUserIsAdmin::class])
         ->group(function () {
 
             // Multi-Factor Authentication Management

@@ -235,7 +235,7 @@ class MfaController extends Controller
             DB::table('mfa_enrollments')->where('user_id', $user->id)->delete();
             $user->tokens()->delete();
 
-            return AuthSessionService::issue($user, $request, ['message' => 'MFA disabled. Re-enrollment is required where policy applies.', 'mfa_enabled' => false]);
+            return AuthSessionService::issue($user, $request, ['message' => 'MFA disabled. You can enable it again in Account Security.', 'mfa_enabled' => false]);
         });
     }
 
@@ -245,7 +245,7 @@ class MfaController extends Controller
 
         return response()->json([
             'mfa_enabled' => $user->hasMfaEnabled(),
-            'mfa_required' => (bool) config('auth.mfa_enforced') || (bool) $user->mfa_required,
+            'mfa_required' => false,
             'mfa_enabled_at' => $user->mfa_enabled_at?->toIso8601String(),
             'remaining_recovery_codes' => count($user->mfa_recovery_codes ?? []),
         ])->header('Cache-Control', 'no-store');

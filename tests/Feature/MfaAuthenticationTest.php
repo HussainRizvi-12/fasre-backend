@@ -331,25 +331,27 @@ class MfaAuthenticationTest extends TestCase
         $resBearer->assertOk();
     }
 
-    public function test_unenrolled_admin_blocked_from_admin_apis_when_mfa_enforced(): void
+    public function test_legacy_mfa_requirements_do_not_block_unenrolled_admins(): void
     {
+        config(['auth.mfa_enforced' => true]);
         $this->admin->update(['mfa_required' => true, 'mfa_secret' => null, 'mfa_enabled_at' => null]);
-        $token = $this->admin->createToken('admin-mfa-required')->plainTextToken;
+        $login = $this->postJson('/api/login', [
+            'email' => $this->admin->email, 'password' => 'Password@123',
+        ])->assertOk()->assertJsonMissingPath('challenge_token');
+        $cookie = collect($login->headers->getCookies())->first(fn ($c) => $c->getName() === 'fasre_session');
+        $this->app['auth']->forgetGuards();
+        $this->withCredentials()->withUnencryptedCookie('fasre_session', $cookie->getValue());
+        $this->getJson('/api/admin/users')->assertOk();
+        $this->getJson('/api/admin/mfa/status')->assertOk()
+            ->assertJsonPath('mfa_enabled', false)->assertJsonPath('mfa_required', false);
 
-        // Access to admin resources is blocked
-        $resBlocked = $this->withToken($token)->getJson('/api/admin/users');
-        $resBlocked->assertStatus(403)
-            ->assertJsonPath('mfa_enrollment_required', true);
-
-        // Access to MFA setup and status is permitted
-        $statusRes = $this->withToken($token)->getJson('/api/admin/mfa/status')->assertOk();
-        $this->assertFalse($statusRes->json('mfa_enabled'));
-
-        $setupRes = $this->withToken($token)->postJson('/api/admin/mfa/setup')->assertOk();
+        // Administrators can still choose to enroll from Account Security.
+        $this->withHeader('X-CSRF-TOKEN', hash_hmac('sha256', 'csrf:'.Crypt::decryptString($cookie->getValue()), config('app.key')));
+        $setupRes = $this->postJson('/api/admin/mfa/setup')->assertOk();
         $secret = $setupRes->json('secret');
 
         // Complete enrollment
-        $confirmed = $this->withToken($token)->postJson('/api/admin/mfa/confirm', [
+        $confirmed = $this->postJson('/api/admin/mfa/confirm', [
             'code' => MfaService::calculateTotp($secret),
         ])->assertOk();
 

@@ -46,7 +46,8 @@ class PortalSessionSecurityTest extends TestCase
         config(['auth.mfa_enforced' => true]);
         $old = $this->loginCookie();
         $this->useCookie($old);
-        $this->getJson('/api/admin/users')->assertForbidden();
+        $this->getJson('/api/admin/users')->assertOk();
+        $this->getJson('/api/admin/mfa/status')->assertOk()->assertJsonPath('mfa_required', false);
         $setup = $this->postJson('/api/admin/mfa/setup')->assertOk()->json();
         $stored = DB::table('mfa_enrollments')->where('user_id', $this->admin->id)->first();
         $this->assertStringNotContainsString($setup['secret'], $stored->payload);
@@ -77,18 +78,25 @@ class PortalSessionSecurityTest extends TestCase
 
     public function test_disable_rotates_current_session_and_removes_pending_enrollment(): void
     {
+        config(['auth.mfa_enforced' => true]);
         $secret = MfaService::generateSecret();
-        $this->admin->update(['mfa_secret' => $secret, 'mfa_enabled_at' => now()]);
+        $this->admin->update(['mfa_secret' => $secret, 'mfa_enabled_at' => now(), 'mfa_required' => true]);
         $old = $this->admin->createToken('old-admin')->plainTextToken;
         $this->withToken($old)->postJson('/api/admin/mfa/setup', [
             'current_password' => 'Password@123', 'current_code' => MfaService::calculateTotp($secret),
         ])->assertOk();
-        $this->withToken($old)->postJson('/api/admin/mfa/disable', [
+        $disabled = $this->withToken($old)->postJson('/api/admin/mfa/disable', [
             'password' => 'Password@123', 'code' => MfaService::calculateTotp($secret),
         ])->assertOk()->assertCookie('fasre_session')->assertJsonMissingPath('token');
         $this->assertTrue(PersonalAccessToken::findToken($old) === null);
         $this->assertDatabaseMissing('mfa_enrollments', ['user_id' => $this->admin->id]);
         $this->assertFalse($this->admin->fresh()->hasMfaEnabled());
+        $cookie = collect($disabled->headers->getCookies())->first(fn ($c) => $c->getName() === 'fasre_session')->getValue();
+        $this->useCookie($cookie);
+        $this->getJson('/api/admin/users')->assertOk();
+        $this->getJson('/api/admin/mfa/status')->assertOk()
+            ->assertJsonPath('mfa_enabled', false)->assertJsonPath('mfa_required', false);
+        $this->loginCookie();
     }
 
     public function test_origin_checks_match_scheme_and_port_and_csrf_survives_testing_environment(): void
