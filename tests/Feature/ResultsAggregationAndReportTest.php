@@ -3,9 +3,10 @@
 namespace Tests\Feature;
 
 use App\Enums\FormType;
-use App\Enums\QuestionType;
 use App\Enums\ReviewWindowStatus;
 use App\Enums\UserRole;
+use App\Models\Course;
+use App\Models\Department;
 use App\Models\Question;
 use App\Models\ReviewResponse;
 use App\Models\ReviewWindow;
@@ -22,9 +23,13 @@ class ResultsAggregationAndReportTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
+
     protected User $student;
+
     protected ReviewWindow $publishedWindow;
+
     protected Section $section;
+
     protected array $questionIds;
 
     protected function setUp(): void
@@ -49,6 +54,49 @@ class ResultsAggregationAndReportTest extends TestCase
             'ends_at' => now()->subDay(),
             'status' => ReviewWindowStatus::Published,
         ]);
+    }
+
+    public function test_csv_export_respects_selected_section_and_retains_suppression(): void
+    {
+        $other = Section::create([
+            'course_id' => $this->section->course_id,
+            'name' => 'UNSELECTED_SECTION',
+            'term' => $this->section->term,
+            'is_active' => true,
+        ]);
+        $token = $this->admin->createToken('export-filter')->plainTextToken;
+        $response = $this->withToken($token)->get('/api/admin/export/review-results?review_window_id='.$this->publishedWindow->id.'&section_id='.$this->section->id);
+        $response->assertOk();
+        $csv = $response->streamedContent();
+        $this->assertStringNotContainsString($other->name, $csv);
+        $this->assertStringContainsString('(suppressed', $csv);
+        $lines = array_filter(explode("\n", trim($csv)));
+        $this->assertCount(2, $lines);
+        $this->assertSame($this->section->name, str_getcsv(array_values($lines)[1])[2]);
+    }
+
+    public function test_section_filter_cannot_export_another_departments_results(): void
+    {
+        $otherDept = Department::create(['name' => 'Export other department', 'code' => 'EXP', 'is_active' => true]);
+        $otherCourse = Course::create(['department_id' => $otherDept->id, 'code' => 'EXP101', 'title' => 'Other course', 'is_active' => true]);
+        $foreign = Section::create(['course_id' => $otherCourse->id, 'name' => 'PRIVATE_FOREIGN_SECTION', 'term' => $this->section->term, 'is_active' => true]);
+        $scopedAdmin = User::factory()->create(['role' => UserRole::Admin, 'is_central_qa' => false, 'department_id' => $this->section->course->department_id]);
+        $token = $scopedAdmin->createToken('scoped-export')->plainTextToken;
+        $response = $this->withToken($token)->get('/api/admin/export/review-results?review_window_id='.$this->publishedWindow->id.'&section_id='.$foreign->id);
+        $response->assertOk();
+        $csv = $response->streamedContent();
+        $this->assertStringNotContainsString($foreign->name, $csv);
+        $this->assertStringNotContainsString($otherCourse->code, $csv);
+        $this->assertCount(1, array_filter(explode("\n", trim($csv))));
+    }
+
+    public function test_selected_section_export_preserves_release_gate_and_validates_filter(): void
+    {
+        $token = $this->admin->createToken('export-gate')->plainTextToken;
+        $this->withToken($token)->getJson('/api/admin/export/review-results?review_window_id='.$this->publishedWindow->id.'&section_id=invalid')->assertUnprocessable();
+        ReviewWindow::where('status', ReviewWindowStatus::Active)->update(['status' => ReviewWindowStatus::Closed]);
+        $this->publishedWindow->update(['status' => ReviewWindowStatus::Active]);
+        $this->withToken($token)->getJson('/api/admin/export/review-results?review_window_id='.$this->publishedWindow->id.'&section_id='.$this->section->id)->assertUnprocessable();
     }
 
     public function test_suppression_triggers_at_four_responses_and_discloses_at_five(): void
@@ -243,4 +291,3 @@ class ResultsAggregationAndReportTest extends TestCase
             ->assertJson(['message' => 'Cannot delete question with existing recorded responses. Deactivate the question instead.']);
     }
 }
-

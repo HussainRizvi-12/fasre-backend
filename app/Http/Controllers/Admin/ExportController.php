@@ -103,6 +103,7 @@ class ExportController extends Controller
      */
     public function reviewResults(Request $request): StreamedResponse
     {
+        $request->validate(['section_id' => ['nullable', 'integer', 'min:1']]);
         $windowId = $request->query('review_window_id') ?? ReviewWindow::latest('starts_at')->first()?->id;
 
         $window = $windowId ? ReviewWindow::with('formVersion')->find($windowId) : null;
@@ -142,6 +143,9 @@ class ExportController extends Controller
             $this->writeRow($file, ['course_code', 'course_title', 'section', 'term', 'primary_faculty', 'responses', 'suppressed', 'question', 'question_type', 'average_or_percentage']);
 
             $sectionsQuery = Section::with(['course', 'facultyAssignments.faculty'])->orderBy('id');
+            if ($request->filled('section_id')) {
+                $sectionsQuery->whereKey((int) $request->query('section_id'));
+            }
             if ($request->user()->department_id) {
                 $sectionsQuery->whereHas('course', fn ($q) => $q->where('department_id', $request->user()->department_id));
             }
