@@ -54,6 +54,24 @@ class AdministrativeBoundaryRegressionTest extends TestCase
         $this->assertDatabaseMissing('users', ['email' => 'escalation@example.test']);
     }
 
+    public function test_user_import_rejects_ambiguous_department_codes(): void
+    {
+        $this->other->update(['code' => 'cs']);
+        Sanctum::actingAs($this->person('admin', null));
+        $this->postJson('/api/admin/bulk-import', ['type' => 'users', 'csv' => "name,email,role,department_code\nAmbiguous,ambiguous@example.test,student,CS"])
+            ->assertOk()->assertJsonPath('data.created', 0)->assertJsonPath('data.skipped', 1);
+        $this->assertDatabaseMissing('users', ['email' => 'ambiguous@example.test']);
+    }
+
+    public function test_course_import_rejects_ambiguous_department_codes(): void
+    {
+        $this->other->update(['code' => 'cs']);
+        Sanctum::actingAs($this->person('admin', null));
+        $this->postJson('/api/admin/bulk-import', ['type' => 'courses', 'csv' => "department_code,code,title\nCS,AMBIGUOUS,Ambiguous course"])
+            ->assertOk()->assertJsonPath('data.created', 0)->assertJsonPath('data.skipped', 1);
+        $this->assertDatabaseMissing('courses', ['code' => 'AMBIGUOUS']);
+    }
+
     public function test_delegated_user_import_assigns_the_callers_department(): void
     {
         $this->postJson('/api/admin/bulk-import', ['type' => 'users', 'csv' => "name,email,role\nNew Student,new@example.test,student"])

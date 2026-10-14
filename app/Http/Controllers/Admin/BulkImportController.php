@@ -193,7 +193,14 @@ class BulkImportController extends Controller
 
                 $departmentId = $actor->isCentralQa() ? null : $actor->department_id;
                 if (($row['department_code'] ?? '') !== '') {
-                    $departmentId = Department::whereRaw('LOWER(code) = ?', [strtolower($row['department_code'])])->value('id');
+                    $matches = Department::whereRaw('LOWER(code) = ?', [strtolower($row['department_code'])])->limit(2)->get();
+                    if ($matches->count() > 1) {
+                        $skipped++;
+                        $errors[] = "Line {$lineNo}: department code is ambiguous. Use a unique department code before importing.";
+
+                        continue;
+                    }
+                    $departmentId = $matches->first()?->id;
                     if ($departmentId === null || ! $actor->canAccessDepartment($departmentId)) {
                         $skipped++;
                         $errors[] = "Line {$lineNo}: department not found or outside your authorized scope.";
@@ -257,7 +264,7 @@ class BulkImportController extends Controller
 
         $departments = Department::query()
             ->when(! $actor->isCentralQa(), fn ($q) => $q->where('id', $actor->department_id))
-            ->get()->keyBy(fn ($d) => strtolower($d->code ?? $d->name));
+            ->get()->groupBy(fn ($d) => strtolower($d->code ?? $d->name));
 
         DB::transaction(function () use ($rows, &$created, &$skipped, &$errors, $departments) {
             foreach ($rows as $i => $row) {
@@ -265,14 +272,17 @@ class BulkImportController extends Controller
                 $deptKey = strtolower($row['department_code'] ?? $row['department'] ?? '');
                 $code = strtoupper($row['code'] ?? '');
 
-                /** @var Department|null $department */
-                $department = $departments->get($deptKey);
-                if (! $department) {
+                $matches = $departments->get($deptKey, collect());
+                if ($matches->count() !== 1) {
                     $skipped++;
-                    $errors[] = "Line {$lineNo}: department '{$deptKey}' not found. Create it first.";
+                    $errors[] = $matches->isEmpty()
+                        ? "Line {$lineNo}: department '{$deptKey}' not found. Create it first."
+                        : "Line {$lineNo}: department '{$deptKey}' is ambiguous. Use a unique department code before importing.";
 
                     continue;
                 }
+                /** @var Department $department */
+                $department = $matches->first();
 
                 if ($code === '' || ($row['title'] ?? '') === '') {
                     $skipped++;

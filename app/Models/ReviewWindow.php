@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class ReviewWindow extends Model
 {
@@ -33,6 +34,7 @@ class ReviewWindow extends Model
             'ends_at' => 'datetime',
             'published_at' => 'datetime',
             'status' => ReviewWindowStatus::class,
+            'roster_is_frozen' => 'boolean',
         ];
     }
 
@@ -106,6 +108,24 @@ class ReviewWindow extends Model
      */
     public function snapshotRoster(): int
     {
+        return DB::transaction(function () {
+            $window = self::whereKey($this->id)->lockForUpdate()->firstOrFail();
+            if ($window->roster_is_frozen) {
+                $this->roster_is_frozen = true;
+
+                return $window->rosterEntries()->count();
+            }
+            $count = $window->createRosterSnapshot();
+            $window->roster_is_frozen = true;
+            $window->save();
+            $this->roster_is_frozen = true;
+
+            return $count;
+        });
+    }
+
+    private function createRosterSnapshot(): int
+    {
         $eligibleSectionQuery = Section::where('is_active', true);
         if ($this->sections()->exists()) {
             $eligibleSectionIds = $this->sections()->pluck('sections.id')->all();
@@ -149,7 +169,7 @@ class ReviewWindow extends Model
         }
 
         // Check frozen roster if present
-        if ($this->rosterEntries()->exists()) {
+        if ($this->roster_is_frozen || $this->rosterEntries()->exists()) {
             return $this->rosterEntries()
                 ->where('section_id', $sectionId)
                 ->where('student_id', $studentId)

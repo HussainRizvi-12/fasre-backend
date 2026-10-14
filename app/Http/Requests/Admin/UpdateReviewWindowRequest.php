@@ -23,8 +23,8 @@ class UpdateReviewWindowRequest extends FormRequest
         }
 
         // Delegated admin cannot reassign window to another department
-        if (! $user->isCentralQa() && $this->filled('department_id')) {
-            if ((int) $this->input('department_id') !== (int) $user->department_id) {
+        if (! $user->isCentralQa() && $this->exists('department_id')) {
+            if ($this->input('department_id') === null || (int) $this->input('department_id') !== (int) $user->department_id) {
                 return false;
             }
         }
@@ -49,7 +49,7 @@ class UpdateReviewWindowRequest extends FormRequest
             'section_ids.*' => ['integer', 'exists:sections,id'],
             'description' => ['nullable', 'string'],
             'starts_at' => ['sometimes', 'date'],
-            'ends_at' => ['sometimes', 'date', 'after:starts_at'],
+            'ends_at' => ['sometimes', 'date'],
         ];
     }
 
@@ -61,14 +61,22 @@ class UpdateReviewWindowRequest extends FormRequest
                     return;
                 }
 
-                $sectionIds = $this->input('section_ids');
-                if ($sectionIds === null || empty($sectionIds)) {
-                    return;
-                }
-
                 $window = $this->route('review_window') ?? $this->route('reviewWindow');
                 if (! $window instanceof \App\Models\ReviewWindow) {
                     $window = \App\Models\ReviewWindow::find($window);
+                }
+
+                // PATCH may supply just one date; compare the complete resulting interval.
+                $startsAt = $this->input('starts_at', $window?->starts_at);
+                $endsAt = $this->input('ends_at', $window?->ends_at);
+                if ($startsAt && $endsAt && ! \Illuminate\Support\Carbon::parse($endsAt)->greaterThan(\Illuminate\Support\Carbon::parse($startsAt))) {
+                    $validator->errors()->add('ends_at', 'The end date must be after the start date.');
+                }
+
+                // Retained explicit sections must still match a changed term/department.
+                $sectionIds = $this->input('section_ids') ?? $window?->sections()->pluck('sections.id')->all() ?? [];
+                if (empty($sectionIds)) {
+                    return;
                 }
 
                 $term = $this->input('term', $window?->term);
