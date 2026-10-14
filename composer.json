@@ -35,11 +35,10 @@
     "scripts": {
         "setup": [
             "composer install",
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
-            "@php artisan key:generate",
+            "@php scripts/initialize-environment.php",
             "@php artisan migrate --force",
-            "npm install --ignore-scripts",
-            "npm run build"
+            "npm --prefix ../portal ci",
+            "npm --prefix ../portal run build"
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",

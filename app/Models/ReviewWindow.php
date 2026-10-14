@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ReviewWindowStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -78,29 +79,24 @@ class ReviewWindow extends Model
      */
     public function isSectionEligible(int $sectionId): bool
     {
-        $section = Section::with('course')->find($sectionId);
-        if (! $section || ! $section->is_active) {
-            return false;
-        }
+        return $this->eligibleSectionsQuery()->whereKey($sectionId)->exists();
+    }
 
-        // 1. If explicit sections are linked, require membership
+    /** Apply the same eligibility rules to a batch without reloading every section. */
+    public function eligibleSectionsQuery(): Builder
+    {
+        $query = Section::query()->where('sections.is_active', true);
         if ($this->sections()->exists()) {
-            if (! $this->sections()->where('sections.id', $sectionId)->exists()) {
-                return false;
-            }
+            $query->whereIn('sections.id', $this->sections()->select('sections.id')->getQuery());
+        }
+        if ($this->term) {
+            $query->where('sections.term', $this->term);
+        }
+        if ($this->department_id) {
+            $query->whereHas('course', fn (Builder $course) => $course->where('department_id', $this->department_id));
         }
 
-        // 2. If term is specified, match section term
-        if ($this->term && $section->term !== $this->term) {
-            return false;
-        }
-
-        // 3. If department is specified, match section course department
-        if ($this->department_id && (int) $section->course?->department_id !== (int) $this->department_id) {
-            return false;
-        }
-
-        return true;
+        return $query;
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\AuthSessionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
@@ -18,41 +19,45 @@ class AuthController extends Controller
      */
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = User::where('email', $request->email)->first();
+        return DB::transaction(function () use ($request) {
+            // Serialize credential/factor checks and issuance with account updates,
+            // password resets, and MFA changes, all of which lock this same row.
+            $user = User::where('email', $request->email)->lockForUpdate()->first();
 
-        if (! $user) {
-            // Constant-time dummy hash check to prevent email enumeration timing attacks
-            Hash::check($request->password, '$2y$12$eA3VzZ6Xn8bQ9tC2Vw0jJe47dK9a8s7d6f5g4h3j2k1l0m9n8b7v6');
+            if (! $user) {
+                // Constant-time dummy hash check to prevent email enumeration timing attacks
+                Hash::check($request->password, '$2y$12$eA3VzZ6Xn8bQ9tC2Vw0jJe47dK9a8s7d6f5g4h3j2k1l0m9n8b7v6');
 
-            return response()->json([
-                'message' => 'Invalid email or password.',
-            ], 401);
-        }
+                return response()->json([
+                    'message' => 'Invalid email or password.',
+                ], 401);
+            }
 
-        if (! Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'message' => 'Invalid email or password.',
-            ], 401);
-        }
+            if (! Hash::check($request->password, $user->password)) {
+                return response()->json([
+                    'message' => 'Invalid email or password.',
+                ], 401);
+            }
 
-        if (! $user->is_active) {
-            return response()->json([
-                'message' => 'Your account has been deactivated. Please contact the administrator.',
-            ], 401);
-        }
+            if (! $user->is_active) {
+                return response()->json([
+                    'message' => 'Your account has been deactivated. Please contact the administrator.',
+                ], 401);
+            }
 
-        // Privileged MFA gate: if MFA is enabled, issue an ephemeral challenge token
-        if ($user->hasMfaEnabled()) {
-            $challengeToken = $user->createToken('mfa-challenge', ['mfa-challenge'], now()->addMinutes(5))->plainTextToken;
+            // Privileged MFA gate: if MFA is enabled, issue an ephemeral challenge token
+            if ($user->hasMfaEnabled()) {
+                $challengeToken = $user->createToken('mfa-challenge', ['mfa-challenge'], now()->addMinutes(5))->plainTextToken;
 
-            return response()->json([
-                'mfa_required' => true,
-                'challenge_token' => $challengeToken,
-                'message' => 'Multi-factor authentication required. Please enter your 6-digit verification code.',
-            ]);
-        }
+                return response()->json([
+                    'mfa_required' => true,
+                    'challenge_token' => $challengeToken,
+                    'message' => 'Multi-factor authentication required. Please enter your 6-digit verification code.',
+                ]);
+            }
 
-        return AuthSessionService::issue($user, $request, ['message' => 'Login successful.']);
+            return AuthSessionService::issue($user, $request, ['message' => 'Login successful.']);
+        }, 3);
     }
 
     /**

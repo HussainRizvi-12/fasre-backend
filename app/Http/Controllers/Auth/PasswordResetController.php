@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rules\Password as PasswordRule;
@@ -42,17 +43,23 @@ class PasswordResetController extends Controller
             'password' => ['required', 'string', PasswordRule::min(8)],
         ]);
 
-        $status = Password::reset(
-            $request->only('email', 'password', 'token'),
-            function (User $user, string $password) {
-                $user->forceFill([
-                    'password' => Hash::make($password),
-                ])->save();
+        $status = DB::transaction(function () use ($request) {
+            // Lock before the broker verifies/consumes the reset token. This also
+            // serializes duplicate resets and prevents stale concurrent logins.
+            $user = User::where('email', $request->input('email'))->lockForUpdate()->first();
+            if (! $user) {
+                return Password::INVALID_USER;
+            }
 
-                // Revoke all existing tokens to prevent stolen tokens from surviving a password reset
-                $user->tokens()->delete();
-            },
-        );
+            return Password::reset(
+                $request->only('email', 'password', 'token'),
+                function (User $user, string $password) {
+                    $user->forceFill(['password' => Hash::make($password)])->save();
+                    $user->tokens()->delete();
+                    DB::table('mfa_enrollments')->where('user_id', $user->id)->delete();
+                },
+            );
+        }, 3);
 
         if ($status !== Password::PASSWORD_RESET) {
             return response()->json([

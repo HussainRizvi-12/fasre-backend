@@ -1,0 +1,4 @@
+{
+  "schedule": "0 * * * * *",
+  "stopping_wait_time": 90
+}

@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Enums\QuestionType;
+use App\Models\Question;
 use App\Models\ReviewResponse;
+use Illuminate\Support\Collection;
 
 /**
  * Single source of truth for student-review results aggregation.
@@ -25,8 +27,7 @@ class ReviewAggregationService
     /**
      * Aggregate all active student-review answers for one window × section pair.
      *
-     * @param  iterable<\App\Models\Question|object>  $questions
-     * @param  bool  $includeTextResponses
+     * @param  iterable<Question|object>  $questions
      * @return array{response_count: int, is_suppressed: bool, message: ?string, questions: array<int, array<string, mixed>>}
      */
     public function aggregateSection(int $windowId, int $sectionId, iterable $questions, bool $includeTextResponses = false): array
@@ -35,6 +36,32 @@ class ReviewAggregationService
             ->where('section_id', $sectionId)
             ->get();
 
+        return $this->aggregateResponses($responses, $questions, $includeTextResponses);
+    }
+
+    /**
+     * Load only the requested sections in bounded batches. The result contract
+     * and disclosure rules are shared with the single-section/mobile path.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function aggregateSections(int $windowId, array $sectionIds, iterable $questions, bool $includeTextResponses = false): array
+    {
+        $questions = collect($questions);
+        $aggregates = [];
+        foreach (array_chunk(array_values(array_unique($sectionIds)), 100) as $ids) {
+            $responses = ReviewResponse::where('review_window_id', $windowId)
+                ->whereIn('section_id', $ids)->get(['section_id', 'answers_json'])->groupBy('section_id');
+            foreach ($ids as $id) {
+                $aggregates[$id] = $this->aggregateResponses($responses->get($id, collect()), $questions, $includeTextResponses);
+            }
+        }
+
+        return $aggregates;
+    }
+
+    private function aggregateResponses(Collection $responses, iterable $questions, bool $includeTextResponses): array
+    {
         $responseCount = $responses->count();
         $isSectionSuppressed = $responseCount < self::ANONYMITY_THRESHOLD;
 

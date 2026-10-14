@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Enums\FormType;
+use App\Enums\QuestionType;
 use App\Enums\ReviewWindowStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Question;
 use App\Models\ReviewWindow;
-use App\Models\Section;
 use App\Services\ReviewAggregationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -64,7 +64,7 @@ class ReviewResultsController extends Controller
             ]);
         }
 
-        $sectionsQuery = Section::with(['course.department', 'facultyAssignments.faculty']);
+        $sectionsQuery = $window->eligibleSectionsQuery()->with(['course.department', 'facultyAssignments.faculty']);
         if ($request->user()->department_id) {
             $sectionsQuery->whereHas('course', fn ($q) => $q->where('department_id', $request->user()->department_id));
         }
@@ -79,7 +79,7 @@ class ReviewResultsController extends Controller
             $questions = collect($window->formVersion->getQuestions())->map(fn ($q) => (object) [
                 'id' => $q['id'],
                 'question_text' => $q['question_text'],
-                'question_type' => \App\Enums\QuestionType::tryFrom($q['question_type']) ?? $q['question_type'],
+                'question_type' => QuestionType::tryFrom($q['question_type']) ?? $q['question_type'],
             ]);
         } else {
             $questions = Question::where('form_type', FormType::StudentReview)
@@ -88,20 +88,13 @@ class ReviewResultsController extends Controller
                 ->get();
         }
 
-        $aggregator = app(ReviewAggregationService::class);
+        $aggregates = app(ReviewAggregationService::class)->aggregateSections(
+            (int) $window->id, $sections->modelKeys(), $questions, includeTextResponses: true
+        );
         $data = [];
 
         foreach ($sections as $section) {
-            if (! $window->isSectionEligible($section->id)) {
-                continue;
-            }
-
-            $aggregate = $aggregator->aggregateSection(
-                (int) $window->id,
-                (int) $section->id,
-                $questions,
-                includeTextResponses: true
-            );
+            $aggregate = $aggregates[$section->id];
 
             $data[] = [
                 'section_id' => $section->id,
