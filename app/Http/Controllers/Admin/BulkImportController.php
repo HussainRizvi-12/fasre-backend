@@ -218,6 +218,7 @@ class BulkImportController extends Controller
                 if ($role === 'admin' && (($centralGrant && $departmentId !== null) || (! $centralGrant && $departmentId === null))) {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: administrator accounts require a department_code or an explicit is_central_qa grant, never both.";
+
                     continue;
                 }
                 $validation = Validator::make($row, [
@@ -353,6 +354,17 @@ class BulkImportController extends Controller
                 if ($name === '' || $term === '') {
                     $skipped++;
                     $errors[] = "Line {$lineNo}: missing name or term.";
+
+                    continue;
+                }
+
+                $validation = Validator::make($row, [
+                    'name' => ['required', 'string', 'max:255'],
+                    'term' => ['required', 'string', 'max:100'],
+                ]);
+                if ($validation->fails()) {
+                    $skipped++;
+                    $errors[] = "Line {$lineNo}: ".$validation->errors()->first();
 
                     continue;
                 }

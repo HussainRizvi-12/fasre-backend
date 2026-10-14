@@ -20,6 +20,39 @@ class ReviewResultsBatchingTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_streamed_csv_queries_are_batched_and_preserve_section_filter(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_central_qa' => true, 'department_id' => null]);
+        $department = Department::create(['name' => 'CSV batch', 'code' => 'CSV']);
+        $course = Course::create(['department_id' => $department->id, 'code' => 'CSV101', 'title' => 'CSV']);
+        $window = ReviewWindow::create(['title' => 'CSV cycle', 'term' => 'Fall 2026', 'starts_at' => now()->subDays(3), 'ends_at' => now()->subDay(), 'status' => 'closed']);
+        $token = $admin->createToken('csv')->plainTextToken;
+        $counts = [];
+        foreach ([1, 50, 101] as $size) {
+            while (Section::count() < $size) {
+                Section::create(['course_id' => $course->id, 'name' => 'CSV-'.(Section::count() + 1), 'term' => 'Fall 2026', 'is_active' => true]);
+            }
+            DB::enableQueryLog();
+            DB::flushQueryLog();
+            try {
+                $response = $this->withToken($token)->get('/api/admin/export/review-results?review_window_id='.$window->id)->assertOk();
+                $csv = $response->streamedContent();
+                $counts[] = count(DB::getQueryLog());
+            } finally {
+                DB::disableQueryLog();
+                DB::flushQueryLog();
+            }
+            $this->assertCount($size + 1, array_filter(explode("\n", trim($csv))));
+            $this->assertStringContainsString('(suppressed', $csv);
+        }
+        $this->assertLessThanOrEqual($counts[0] + 2, $counts[1]);
+        $this->assertLessThanOrEqual($counts[1] + 7, $counts[2]);
+        $first = Section::firstOrFail();
+        $csv = $this->withToken($token)->get('/api/admin/export/review-results?review_window_id='.$window->id.'&section_id='.$first->id)->assertOk()->streamedContent();
+        $this->assertCount(2, array_filter(explode("\n", trim($csv))));
+        $this->assertStringNotContainsString('CSV-2,', $csv);
+    }
+
     public function test_results_query_count_does_not_grow_per_section(): void
     {
         $admin = User::factory()->create(['role' => UserRole::Admin, 'is_central_qa' => true, 'department_id' => null]);
@@ -92,6 +125,12 @@ class ReviewResultsBatchingTest extends TestCase
         $this->assertCount(5, $questions[4]['responses']);
         $this->assertTrue($data['suppressed']['is_suppressed']);
         $this->assertSame([], $data['suppressed']['questions']);
+
+        $csv = $this->withToken($admin->createToken('csv-suppression')->plainTextToken)
+            ->get('/api/admin/export/review-results?review_window_id='.$window->id)->assertOk()->streamedContent();
+        $this->assertStringContainsString('fewer than 5 answers', $csv);
+        $this->assertStringNotContainsString('Private optional', $csv);
+        $this->assertStringNotContainsString('Visible 0', $csv);
 
         $definitions = collect($form->getQuestions())->map(fn ($question) => (object) $question);
         $service = app(ReviewAggregationService::class);

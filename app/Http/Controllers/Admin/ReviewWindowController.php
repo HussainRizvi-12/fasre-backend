@@ -14,6 +14,7 @@ use App\Models\ReviewWindow;
 use App\Models\User;
 use App\Services\ActivityLogger;
 use App\Services\NotificationService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -93,42 +94,42 @@ class ReviewWindowController extends Controller
 
     public function update(UpdateReviewWindowRequest $request, ReviewWindow $reviewWindow): JsonResponse
     {
-        if (! $request->user()->canAccessDepartment($reviewWindow->department_id)) {
-            abort(403, 'Forbidden. Access restricted by department scope.');
-        }
+        $reviewWindow = DB::transaction(function () use ($request, $reviewWindow) {
+            $reviewWindow = ReviewWindow::whereKey($reviewWindow->id)->lockForUpdate()->firstOrFail();
+            abort_unless($request->user()->canAccessDepartment($reviewWindow->department_id), 403, 'Forbidden. Access restricted by department scope.');
+            abort_if($reviewWindow->status !== ReviewWindowStatus::Draft, 422,
+                'Review window can only be edited while in draft status. Current status: '.$reviewWindow->status->value);
 
-        if ($reviewWindow->status !== ReviewWindowStatus::Draft) {
-            return response()->json([
-                'message' => 'Review window can only be edited while in draft status. Current status: ' . $reviewWindow->status->value,
-            ], 422);
-        }
+            // Partial PATCH validation must use the freshly locked interval/scope.
+            $validated = $request->validatedForWindow($reviewWindow);
+            $sectionIds = $validated['section_ids'] ?? null;
+            unset($validated['section_ids']);
 
-        $validated = $request->validated();
-        $sectionIds = $validated['section_ids'] ?? null;
-        unset($validated['section_ids']);
+            $beforeState = [
+                'title' => $reviewWindow->title,
+                'term' => $reviewWindow->term,
+                'starts_at' => $reviewWindow->starts_at?->toIso8601String(),
+                'ends_at' => $reviewWindow->ends_at?->toIso8601String(),
+            ];
 
-        $beforeState = [
-            'title' => $reviewWindow->title,
-            'term' => $reviewWindow->term,
-            'starts_at' => $reviewWindow->starts_at?->toIso8601String(),
-            'ends_at' => $reviewWindow->ends_at?->toIso8601String(),
-        ];
+            $reviewWindow->update($validated);
 
-        $reviewWindow->update($validated);
+            if ($sectionIds !== null) {
+                $reviewWindow->sections()->sync($sectionIds);
+            }
 
-        if ($sectionIds !== null) {
-            $reviewWindow->sections()->sync($sectionIds);
-        }
+            ActivityLogger::log($reviewWindow, 'review_window.updated', ['title' => $reviewWindow->title]);
+            AuditProvenanceLog::record(
+                $reviewWindow,
+                'updated',
+                $request->user(),
+                'Review window updated.',
+                $beforeState,
+                ['title' => $reviewWindow->title, 'term' => $reviewWindow->term]
+            );
 
-        ActivityLogger::log($reviewWindow, 'review_window.updated', ['title' => $reviewWindow->title]);
-        AuditProvenanceLog::record(
-            $reviewWindow,
-            'updated',
-            $request->user(),
-            'Review window updated.',
-            $beforeState,
-            ['title' => $reviewWindow->title, 'term' => $reviewWindow->term]
-        );
+            return $reviewWindow;
+        }, 3);
 
         return response()->json([
             'data' => $reviewWindow->fresh(['department', 'formVersion', 'sections']),
@@ -182,7 +183,7 @@ class ReviewWindowController extends Controller
             try {
                 $window->status = ReviewWindowStatus::Active;
                 $window->save();
-            } catch (\Illuminate\Database\QueryException $e) {
+            } catch (QueryException $e) {
                 abort(422, 'Cannot activate review window: another review window is currently active. Close the active window first.');
             }
 

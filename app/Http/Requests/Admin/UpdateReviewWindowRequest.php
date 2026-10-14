@@ -2,10 +2,29 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\FormType;
+use App\Models\ReviewWindow;
+use App\Models\Section;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateReviewWindowRequest extends FormRequest
 {
+    private ?ReviewWindow $lockedWindow = null;
+
+    public function validatedForWindow(ReviewWindow $window): array
+    {
+        $this->lockedWindow = $window;
+        $validator = \Illuminate\Support\Facades\Validator::make($this->all(), $this->rules());
+        foreach ($this->after() as $check) {
+            $validator->after($check);
+        }
+
+        return $validator->validate();
+    }
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -14,8 +33,8 @@ class UpdateReviewWindowRequest extends FormRequest
         }
 
         $window = $this->route('review_window') ?? $this->route('reviewWindow');
-        if (! $window instanceof \App\Models\ReviewWindow) {
-            $window = \App\Models\ReviewWindow::find($window);
+        if (! $window instanceof ReviewWindow) {
+            $window = ReviewWindow::find($window);
         }
 
         if ($window && ! $user->canAccessDepartment($window->department_id)) {
@@ -41,8 +60,8 @@ class UpdateReviewWindowRequest extends FormRequest
             'form_version_id' => [
                 'nullable',
                 'integer',
-                \Illuminate\Validation\Rule::exists('form_versions', 'id')
-                    ->where('form_type', \App\Enums\FormType::StudentReview->value)
+                Rule::exists('form_versions', 'id')
+                    ->where('form_type', FormType::StudentReview->value)
                     ->where('is_published', true),
             ],
             'section_ids' => ['nullable', 'array'],
@@ -56,20 +75,20 @@ class UpdateReviewWindowRequest extends FormRequest
     public function after(): array
     {
         return [
-            function (\Illuminate\Validation\Validator $validator) {
+            function (Validator $validator) {
                 if ($validator->errors()->isNotEmpty()) {
                     return;
                 }
 
-                $window = $this->route('review_window') ?? $this->route('reviewWindow');
-                if (! $window instanceof \App\Models\ReviewWindow) {
-                    $window = \App\Models\ReviewWindow::find($window);
+                $window = $this->lockedWindow ?? $this->route('review_window') ?? $this->route('reviewWindow');
+                if (! $window instanceof ReviewWindow) {
+                    $window = ReviewWindow::find($window);
                 }
 
                 // PATCH may supply just one date; compare the complete resulting interval.
                 $startsAt = $this->input('starts_at', $window?->starts_at);
                 $endsAt = $this->input('ends_at', $window?->ends_at);
-                if ($startsAt && $endsAt && ! \Illuminate\Support\Carbon::parse($endsAt)->greaterThan(\Illuminate\Support\Carbon::parse($startsAt))) {
+                if ($startsAt && $endsAt && ! Carbon::parse($endsAt)->greaterThan(Carbon::parse($startsAt))) {
                     $validator->errors()->add('ends_at', 'The end date must be after the start date.');
                 }
 
@@ -83,7 +102,7 @@ class UpdateReviewWindowRequest extends FormRequest
                 $user = $this->user();
                 $deptId = $this->input('department_id', $window?->department_id);
 
-                $sections = \App\Models\Section::with('course')->whereIn('id', $sectionIds)->get();
+                $sections = Section::with('course')->whereIn('id', $sectionIds)->get();
                 foreach ($sections as $section) {
                     if ($term && $section->term !== $term) {
                         $validator->errors()->add('section_ids', "Section '{$section->name}' (term: {$section->term}) does not match the window term '{$term}'.");

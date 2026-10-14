@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreSectionRequest;
 use App\Http\Requests\Admin\UpdateSectionRequest;
+use App\Models\AuditProvenanceLog;
+use App\Models\Course;
 use App\Models\Section;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class SectionController extends Controller
 {
-    public function index(\Illuminate\Http\Request $request): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $user = $request->user();
         $query = Section::with('course.department');
@@ -27,7 +30,7 @@ class SectionController extends Controller
 
     public function store(StoreSectionRequest $request): JsonResponse
     {
-        $course = \App\Models\Course::find($request->input('course_id'));
+        $course = Course::findOrFail($request->input('course_id'));
         if (! $request->user()->canAccessDepartment($course?->department_id)) {
             abort(403, 'Forbidden. Access restricted by department scope.');
         }
@@ -40,7 +43,7 @@ class SectionController extends Controller
         ], 201);
     }
 
-    public function show(\Illuminate\Http\Request $request, Section $section): JsonResponse
+    public function show(Request $request, Section $section): JsonResponse
     {
         if (! $request->user()->canAccessDepartment($section->course?->department_id)) {
             abort(403, 'Forbidden. Access restricted by department scope.');
@@ -59,7 +62,7 @@ class SectionController extends Controller
         }
 
         if ($request->filled('course_id')) {
-            $newCourse = \App\Models\Course::find($request->input('course_id'));
+            $newCourse = Course::findOrFail($request->input('course_id'));
             if (! $request->user()->canAccessDepartment($newCourse?->department_id)) {
                 abort(403, 'Forbidden. Target course is outside your authorized department scope.');
             }
@@ -73,7 +76,7 @@ class SectionController extends Controller
         ]);
     }
 
-    public function destroy(\Illuminate\Http\Request $request, Section $section): JsonResponse
+    public function destroy(Request $request, Section $section): JsonResponse
     {
         if (! $request->user()->canAccessDepartment($section->course?->department_id)) {
             abort(403, 'Forbidden. Access restricted by department scope.');
@@ -84,7 +87,7 @@ class SectionController extends Controller
         // Perform soft delete to preserve historical references
         $section->delete();
 
-        \App\Models\AuditProvenanceLog::record(
+        AuditProvenanceLog::record(
             $section,
             $hasHistory ? 'archived_with_evaluations' : 'archived',
             $request->user(),

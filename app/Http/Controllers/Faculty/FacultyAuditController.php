@@ -18,6 +18,7 @@ use App\Services\AuditScoringService;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -33,7 +34,7 @@ class FacultyAuditController extends Controller
         ], true);
     }
 
-    private function administratorsFor(AuditAssignment $audit): \Illuminate\Support\Collection
+    private function administratorsFor(AuditAssignment $audit): Collection
     {
         $departmentId = $audit->section?->course?->department_id;
 
@@ -443,9 +444,9 @@ class FacultyAuditController extends Controller
                 }
 
                 $scoring = AuditScoringService::evaluate($answers, $r->formVersion);
-                $band = $r->outcome_band ?? $scoring['outcome_band'] ?? 'Satisfactory';
-                $bandColor = $scoring['band_color'] ?? 'info';
-                $outcome = $scoring['outcome'] ?? 'meetsStandard';
+                $band = $r->total_score === null ? null : ($r->outcome_band ?? $scoring['outcome_band']);
+                $bandColor = $r->total_score === null ? null : $scoring['band_color'];
+                $outcome = $r->total_score === null ? null : $scoring['outcome'];
 
                 return [
                     'id' => $r->id,
@@ -676,6 +677,7 @@ class FacultyAuditController extends Controller
                 'status' => $action->status,
                 'user' => $request->user()->name,
             ]);
+
             return $action;
         });
 

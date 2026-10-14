@@ -142,50 +142,47 @@ class ExportController extends Controller
         return $this->streamCsv("fasre-review-results-{$window->id}.csv", function ($file) use ($window, $questions, $aggregator, $request) {
             $this->writeRow($file, ['course_code', 'course_title', 'section', 'term', 'primary_faculty', 'responses', 'suppressed', 'question', 'question_type', 'average_or_percentage']);
 
-            $sectionsQuery = Section::with(['course', 'facultyAssignments.faculty'])->orderBy('id');
+            $sectionsQuery = $window->eligibleSectionsQuery()->with(['course', 'facultyAssignments.faculty'])->orderBy('id');
             if ($request->filled('section_id')) {
                 $sectionsQuery->whereKey((int) $request->query('section_id'));
             }
             if ($request->user()->department_id) {
                 $sectionsQuery->whereHas('course', fn ($q) => $q->where('department_id', $request->user()->department_id));
             }
-            $sections = $sectionsQuery->get();
+            $sectionsQuery->chunkById(100, function ($sections) use ($file, $window, $questions, $aggregator) {
+                $aggregates = $aggregator->aggregateSections((int) $window->id, $sections->modelKeys(), $questions);
+                foreach ($sections as $section) {
+                    $aggregate = $aggregates[$section->id];
 
-            foreach ($sections as $section) {
-                if (! $window->isSectionEligible($section->id)) {
-                    continue;
-                }
+                    $primary = $section->facultyAssignments->firstWhere('is_primary', true)?->faculty?->name;
+                    $base = [$section->course?->code, $section->course?->title, $section->name, $section->term, $primary, $aggregate['response_count'], $aggregate['is_suppressed'] ? 'yes' : 'no'];
 
-                $aggregate = $aggregator->aggregateSection((int) $window->id, (int) $section->id, $questions);
+                    if ($aggregate['is_suppressed']) {
+                        $this->writeRow($file, [...$base, '(suppressed — fewer than 5 responses)', '', '']);
 
-                $primary = $section->facultyAssignments->firstWhere('is_primary', true)?->faculty?->name;
-                $base = [$section->course?->code, $section->course?->title, $section->name, $section->term, $primary, $aggregate['response_count'], $aggregate['is_suppressed'] ? 'yes' : 'no'];
-
-                if ($aggregate['is_suppressed']) {
-                    $this->writeRow($file, [...$base, '(suppressed — fewer than 5 responses)', '', '']);
-
-                    continue;
-                }
-
-                foreach ($aggregate['questions'] as $q) {
-                    if ($q['is_suppressed'] ?? false) {
-                        $value = '(suppressed — fewer than 5 answers)';
-                    } else {
-                        $value = match ($q['type']) {
-                            'rating' => $q['average'],
-                            'yes_no' => $q['percentage_yes'],
-                            default => $q['submission_count'],
-                        };
+                        continue;
                     }
 
-                    $typeLabel = match ($q['type']) {
-                        'rating' => 'rating (1-5)',
-                        'yes_no' => 'yes/no (% yes)',
-                        default => 'text (comments)',
-                    };
-                    $this->writeRow($file, [...$base, $q['question_text'], $typeLabel, $value]);
+                    foreach ($aggregate['questions'] as $q) {
+                        if ($q['is_suppressed'] ?? false) {
+                            $value = '(suppressed — fewer than 5 answers)';
+                        } else {
+                            $value = match ($q['type']) {
+                                'rating' => $q['average'],
+                                'yes_no' => $q['percentage_yes'],
+                                default => $q['submission_count'],
+                            };
+                        }
+
+                        $typeLabel = match ($q['type']) {
+                            'rating' => 'rating (1-5)',
+                            'yes_no' => 'yes/no (% yes)',
+                            default => 'text (comments)',
+                        };
+                        $this->writeRow($file, [...$base, $q['question_text'], $typeLabel, $value]);
+                    }
                 }
-            }
+            });
         });
     }
 

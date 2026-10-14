@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Enums\FormType;
 use App\Http\Controllers\Controller;
-use App\Services\AuditScoringService;
 use App\Models\AuditProvenanceLog;
 use App\Models\FormVersion;
 use App\Models\Question;
 use App\Services\ActivityLogger;
+use App\Services\AuditScoringService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -89,6 +88,15 @@ class FormVersionController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:1000'],
             'scoring_rules_json' => ['nullable', 'array'],
+            'scoring_rules_json.bands' => ['sometimes', 'array', 'min:1', 'max:20', 'list'],
+            'scoring_rules_json.bands.*' => ['required', 'array'],
+            'scoring_rules_json.bands.*.min' => ['required', 'numeric', 'min:0', 'max:100', 'decimal:0,2'],
+            'scoring_rules_json.bands.*.max' => ['required', 'numeric', 'min:0', 'max:100', 'decimal:0,2'],
+            'scoring_rules_json.bands.*.label' => ['required', 'string', 'max:100'],
+            'scoring_rules_json.bands.*.key' => ['sometimes', 'string', 'max:100'],
+            'scoring_rules_json.bands.*.outcome' => ['sometimes', Rule::in(['needsImprovement', 'meetsStandard', 'exceedsStandard'])],
+            'scoring_rules_json.bands.*.color' => ['sometimes', 'string', 'max:30'],
+            'scoring_rules_json.bands.*.requires_action_plan' => ['sometimes', 'boolean'],
         ]);
 
         $activeQuestions = Question::where('form_type', $validated['form_type'])
@@ -119,12 +127,18 @@ class FormVersionController extends Controller
 
         $scoringRules = $validated['scoring_rules_json'] ?? $defaultScoringRules;
         if (! empty($scoringRules['bands'])) {
+            $previousMax = null;
             foreach ($scoringRules['bands'] as $i => &$b) {
-                if (! isset($b['min'], $b['max'], $b['label'])) {
+                $min = (int) round((float) $b['min'] * 100);
+                $max = (int) round((float) $b['max'] * 100);
+                // Scores are rounded to hundredths. Every possible score must
+                // have exactly one band, including the zero and 100 endpoints.
+                if ($min > $max || $min !== ($previousMax === null ? 0 : $previousMax + 1)) {
                     throw ValidationException::withMessages([
-                        "scoring_rules_json.bands.{$i}" => 'Each scoring band must specify min, max, and label.',
+                        "scoring_rules_json.bands.{$i}" => 'Scoring bands must cover 0 to 100 in order without gaps or overlaps.',
                     ]);
                 }
+                $previousMax = $max;
                 if (! isset($b['outcome'])) {
                     $lbl = strtolower($b['label']);
                     $b['outcome'] = (str_contains($lbl, 'critical') || str_contains($lbl, 'needs improvement') || ($b['requires_action_plan'] ?? false) || (float) $b['min'] < 60)
@@ -136,6 +150,9 @@ class FormVersionController extends Controller
                 }
             }
             unset($b);
+            if ($previousMax !== 10000) {
+                throw ValidationException::withMessages(['scoring_rules_json.bands' => 'The final scoring band must include 100.']);
+            }
         }
 
         $formVersion = FormVersion::create([
@@ -160,7 +177,7 @@ class FormVersionController extends Controller
             $formVersion,
             'published',
             $request->user(),
-            "Form version '{$formVersion->version_code}' published with " . count($questionsSnapshot) . " snapshotted questions.",
+            "Form version '{$formVersion->version_code}' published with ".count($questionsSnapshot).' snapshotted questions.',
             null,
             [
                 'id' => $formVersion->id,
