@@ -16,7 +16,7 @@ class SectionController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $query = Section::with('course.department');
+        $query = Section::with('course.department')->whereHas('course');
 
         if ($user && $user->isAdmin() && ! $user->isCentralQa()) {
             $query->whereHas('course', fn ($q) => $q->where('department_id', $user->department_id));

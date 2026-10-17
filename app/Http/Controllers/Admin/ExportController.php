@@ -78,9 +78,13 @@ class ExportController extends Controller
         return $this->streamCsv('fasre-enrollments.csv', function ($file) use ($request) {
             $this->writeRow($file, ['student_name', 'student_email', 'course_code', 'section', 'term', 'enrolled_at']);
 
-            $query = StudentEnrollment::with(['student', 'section.course'])->orderBy('id');
+            $query = StudentEnrollment::with([
+                'student',
+                'section' => fn ($q) => $q->withTrashed()->with(['course' => fn ($q) => $q->withTrashed()]),
+            ])->orderBy('id');
             if ($request->user()->department_id) {
-                $query->whereHas('section.course', fn ($q) => $q->where('department_id', $request->user()->department_id));
+                $query->whereHas('section', fn ($q) => $q->withTrashed()->whereHas('course',
+                    fn ($q) => $q->withTrashed()->where('department_id', $request->user()->department_id)));
             }
 
             $query->chunk(500, function ($enrollments) use ($file) {
@@ -142,12 +146,15 @@ class ExportController extends Controller
         return $this->streamCsv("fasre-review-results-{$window->id}.csv", function ($file) use ($window, $questions, $aggregator, $request) {
             $this->writeRow($file, ['course_code', 'course_title', 'section', 'term', 'primary_faculty', 'responses', 'suppressed', 'question', 'question_type', 'average_or_percentage']);
 
-            $sectionsQuery = $window->eligibleSectionsQuery()->with(['course', 'facultyAssignments.faculty'])->orderBy('id');
+            $sectionsQuery = $window->resultsSectionsQuery()->with([
+                'course' => fn ($q) => $q->withTrashed(),
+                'facultyAssignments.faculty',
+            ])->orderBy('id');
             if ($request->filled('section_id')) {
                 $sectionsQuery->whereKey((int) $request->query('section_id'));
             }
             if ($request->user()->department_id) {
-                $sectionsQuery->whereHas('course', fn ($q) => $q->where('department_id', $request->user()->department_id));
+                $sectionsQuery->whereHas('course', fn ($q) => $q->withTrashed()->where('department_id', $request->user()->department_id));
             }
             $sectionsQuery->chunkById(100, function ($sections) use ($file, $window, $questions, $aggregator) {
                 $aggregates = $aggregator->aggregateSections((int) $window->id, $sections->modelKeys(), $questions);
@@ -191,12 +198,12 @@ class ExportController extends Controller
         return $this->streamCsv('fasre-audit-assignments.csv', function ($file) use ($request) {
             $this->writeRow($file, ['id', 'auditor', 'auditee', 'course_code', 'section', 'term', 'status', 'total_score', 'due_date', 'submitted_at', 'approved_at', 'admin_remarks']);
 
-            $query = AuditAssignment::with(['auditor', 'auditee', 'section.course'])
+            $query = AuditAssignment::with(['auditor', 'auditee', 'historicalSection.historicalCourse'])
                 ->orderByDesc('created_at');
 
             if ($request->user()->department_id) {
                 $userDeptId = $request->user()->department_id;
-                $query->whereHas('section.course', fn ($q) => $q->where('department_id', $userDeptId));
+                $query->whereHas('historicalSection.historicalCourse', fn ($q) => $q->where('department_id', $userDeptId));
             }
 
             $query->chunk(500, function ($audits) use ($file) {
@@ -205,9 +212,9 @@ class ExportController extends Controller
                         $a->id,
                         $a->auditor?->name,
                         $a->auditee?->name,
-                        $a->section?->course?->code,
-                        $a->section?->name,
-                        $a->section?->term,
+                        $a->historicalSection?->historicalCourse?->code,
+                        $a->historicalSection?->name,
+                        $a->historicalSection?->term,
                         $a->status->value,
                         $a->total_score,
                         $a->due_date?->toDateString(),

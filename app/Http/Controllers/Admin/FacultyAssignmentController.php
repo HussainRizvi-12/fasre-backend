@@ -13,9 +13,13 @@ class FacultyAssignmentController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = FacultyAssignment::with(['section.course', 'faculty']);
+        $query = FacultyAssignment::with([
+            'section' => fn ($q) => $q->withTrashed()->with(['course' => fn ($q) => $q->withTrashed()]),
+            'faculty',
+        ]);
         if (! $request->user()->isCentralQa()) {
-            $query->whereHas('section.course', fn ($q) => $q->where('department_id', $request->user()->department_id));
+            $query->whereHas('section', fn ($q) => $q->withTrashed()->whereHas('course',
+                fn ($q) => $q->withTrashed()->where('department_id', $request->user()->department_id)));
         }
 
         if ($request->has('section_id')) {

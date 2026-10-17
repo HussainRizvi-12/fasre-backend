@@ -170,12 +170,12 @@ class AuditEvidenceController extends Controller
 
     public function index(Request $request, int $id): JsonResponse
     {
-        $audit = AuditAssignment::with(['evidenceFiles', 'section.course', 'auditee'])->findOrFail($id);
+        $audit = AuditAssignment::with(['evidenceFiles', 'historicalSection.historicalCourse', 'auditee'])->findOrFail($id);
 
         $user = $request->user();
         $isAuditor = $audit->auditor_id === $user->id;
         $isAuditee = $audit->auditee_id === $user->id;
-        $auditDeptId = $audit->section?->course?->department_id ?? $audit->auditee?->department_id;
+        $auditDeptId = $audit->historicalSection?->historicalCourse?->department_id ?? $audit->auditee?->department_id;
         $isAdmin = $user->isAdmin() && $user->canAccessDepartment($auditDeptId);
 
         $isPostApproval = in_array($audit->status, [
@@ -200,13 +200,13 @@ class AuditEvidenceController extends Controller
      */
     public function download(Request $request, int $fileId): Response
     {
-        $file = AuditEvidenceFile::with(['auditAssignment.section.course', 'auditAssignment.auditee'])->findOrFail($fileId);
+        $file = AuditEvidenceFile::with(['auditAssignment.historicalSection.historicalCourse', 'auditAssignment.auditee'])->findOrFail($fileId);
         $audit = $file->auditAssignment;
 
         $user = $request->user();
         $isAuditor = $audit && $audit->auditor_id === $user->id;
         $isAuditee = $audit && $audit->auditee_id === $user->id;
-        $auditDeptId = $audit?->section?->course?->department_id ?? $audit?->auditee?->department_id;
+        $auditDeptId = $audit?->historicalSection?->historicalCourse?->department_id ?? $audit?->auditee?->department_id;
         $isAdmin = $user->isAdmin() && $user->canAccessDepartment($auditDeptId);
         $isPostApproval = $audit && in_array($audit->status, [
             AuditAssignmentStatus::Approved,

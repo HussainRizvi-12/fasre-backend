@@ -36,7 +36,7 @@ class FacultyAuditController extends Controller
 
     private function administratorsFor(AuditAssignment $audit): Collection
     {
-        $departmentId = $audit->section?->course?->department_id;
+        $departmentId = $audit->historicalSection?->historicalCourse?->department_id;
 
         return User::where('role', UserRole::Admin)->where('is_active', true)->get()
             ->filter(fn (User $user) => $user->canAccessDepartment($departmentId));
@@ -75,7 +75,7 @@ class FacultyAuditController extends Controller
      */
     public function assignedAudits(Request $request): JsonResponse
     {
-        $audits = AuditAssignment::with(['auditee', 'section.course', 'formVersion'])
+        $audits = AuditAssignment::with(['auditee', 'historicalSection.historicalCourse', 'formVersion'])
             ->where('auditor_id', $request->user()->id)
             ->orderBy('due_date')
             ->get();
@@ -97,14 +97,14 @@ class FacultyAuditController extends Controller
                     'email' => $a->auditee?->email,
                 ],
                 'section' => [
-                    'id' => $a->section?->id,
-                    'name' => $a->section?->name,
-                    'term' => $a->section?->term,
+                    'id' => $a->historicalSection?->id,
+                    'name' => $a->historicalSection?->name,
+                    'term' => $a->historicalSection?->term,
                 ],
                 'course' => [
-                    'id' => $a->section?->course?->id,
-                    'code' => $a->section?->course?->code,
-                    'title' => $a->section?->course?->title,
+                    'id' => $a->historicalSection?->historicalCourse?->id,
+                    'code' => $a->historicalSection?->historicalCourse?->code,
+                    'title' => $a->historicalSection?->historicalCourse?->title,
                 ],
                 'status' => $a->status->value,
                 'due_date' => $a->due_date?->toDateString(),
@@ -125,7 +125,7 @@ class FacultyAuditController extends Controller
      */
     public function show(Request $request, int $id): JsonResponse
     {
-        $audit = AuditAssignment::with(['auditor', 'auditee', 'section.course', 'formVersion'])->find($id);
+        $audit = AuditAssignment::with(['auditor', 'auditee', 'historicalSection.historicalCourse', 'formVersion'])->find($id);
 
         if (! $audit) {
             return response()->json(['message' => 'Audit assignment not found.'], 404);
@@ -158,14 +158,14 @@ class FacultyAuditController extends Controller
                     'name' => $audit->auditee?->name,
                 ],
                 'section' => [
-                    'id' => $audit->section?->id,
-                    'name' => $audit->section?->name,
-                    'term' => $audit->section?->term,
+                    'id' => $audit->historicalSection?->id,
+                    'name' => $audit->historicalSection?->name,
+                    'term' => $audit->historicalSection?->term,
                 ],
                 'course' => [
-                    'id' => $audit->section?->course?->id,
-                    'code' => $audit->section?->course?->code,
-                    'title' => $audit->section?->course?->title,
+                    'id' => $audit->historicalSection?->historicalCourse?->id,
+                    'code' => $audit->historicalSection?->historicalCourse?->code,
+                    'title' => $audit->historicalSection?->historicalCourse?->title,
                 ],
                 'form_version' => $audit->formVersion ? [
                     'id' => $audit->formVersion->id,
@@ -357,7 +357,7 @@ class FacultyAuditController extends Controller
      */
     public function mySubmissions(Request $request): JsonResponse
     {
-        $submissions = AuditAssignment::with(['auditee', 'section.course'])
+        $submissions = AuditAssignment::with(['auditee', 'historicalSection.historicalCourse'])
             ->where('auditor_id', $request->user()->id)
             ->whereIn('status', [
                 AuditAssignmentStatus::Submitted,
@@ -374,9 +374,9 @@ class FacultyAuditController extends Controller
             'data' => $submissions->map(fn ($s) => [
                 'id' => $s->id,
                 'auditee_name' => $s->auditee?->name,
-                'course_title' => $s->section?->course?->title,
-                'course_code' => $s->section?->course?->code,
-                'section_name' => $s->section?->name,
+                'course_title' => $s->historicalSection?->historicalCourse?->title,
+                'course_code' => $s->historicalSection?->historicalCourse?->code,
+                'section_name' => $s->historicalSection?->name,
                 'total_score' => $s->total_score,
                 'status' => $s->status->value,
                 'submitted_at' => $s->submitted_at?->toIso8601String(),
@@ -391,7 +391,7 @@ class FacultyAuditController extends Controller
      */
     public function myReports(Request $request): JsonResponse
     {
-        $reports = AuditAssignment::with(['auditor', 'section.course', 'formVersion', 'improvementActions.owner', 'evidenceFiles'])
+        $reports = AuditAssignment::with(['auditor', 'historicalSection.historicalCourse', 'formVersion', 'improvementActions.owner', 'evidenceFiles'])
             ->where('auditee_id', $request->user()->id)
             ->whereIn('status', [
                 AuditAssignmentStatus::Approved,
@@ -450,10 +450,10 @@ class FacultyAuditController extends Controller
 
                 return [
                     'id' => $r->id,
-                    'course_title' => $r->section?->course?->title,
-                    'course_code' => $r->section?->course?->code,
-                    'section_name' => $r->section?->name,
-                    'term' => $r->section?->term,
+                    'course_title' => $r->historicalSection?->historicalCourse?->title,
+                    'course_code' => $r->historicalSection?->historicalCourse?->code,
+                    'section_name' => $r->historicalSection?->name,
+                    'term' => $r->historicalSection?->term,
                     'auditor_name' => $r->auditor?->name,
                     'total_score' => $r->total_score,
                     'outcome_band' => $band,

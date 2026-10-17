@@ -91,6 +91,11 @@ class AuditAssignment extends Model
         return $this->belongsTo(Section::class);
     }
 
+    public function historicalSection(): BelongsTo
+    {
+        return $this->belongsTo(Section::class, 'section_id')->withTrashed();
+    }
+
     public function formVersion(): BelongsTo
     {
         return $this->belongsTo(FormVersion::class);

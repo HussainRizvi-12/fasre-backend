@@ -30,6 +30,11 @@ class Section extends Model
         return $this->belongsTo(Course::class);
     }
 
+    public function historicalCourse(): BelongsTo
+    {
+        return $this->belongsTo(Course::class, 'course_id')->withTrashed();
+    }
+
     public function facultyAssignments(): HasMany
     {
         return $this->hasMany(FacultyAssignment::class);

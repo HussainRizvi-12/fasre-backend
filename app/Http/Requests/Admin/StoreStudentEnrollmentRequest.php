@@ -54,6 +54,12 @@ class StoreStudentEnrollmentRequest extends FormRequest
     {
         $validator->after(function ($validator) {
             if (! $validator->errors()->has('section_id') && ! $validator->errors()->has('student_id')) {
+                if (! Section::whereKey($this->section_id)->whereHas('course')->exists()) {
+                    $validator->errors()->add('section_id', 'Select a section from the current course catalog.');
+
+                    return;
+                }
+
                 $exists = StudentEnrollment::where('section_id', $this->section_id)
                     ->where('student_id', $this->student_id)
                     ->exists();

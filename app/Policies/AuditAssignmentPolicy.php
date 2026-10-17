@@ -22,7 +22,7 @@ class AuditAssignmentPolicy
     public function view(User $user, AuditAssignment $audit): bool
     {
         if ($user->isAdmin()) {
-            return $user->canAccessDepartment($audit->section?->course?->department_id);
+            return $user->canAccessDepartment($audit->historicalSection?->historicalCourse?->department_id);
         }
 
         if ($user->isFaculty()) {
@@ -64,7 +64,7 @@ class AuditAssignmentPolicy
             return false;
         }
 
-        return $user->canAccessDepartment($audit->section?->course?->department_id);
+        return $user->canAccessDepartment($audit->historicalSection?->historicalCourse?->department_id);
     }
 
     /**

@@ -99,6 +99,26 @@ class ReviewWindow extends Model
         return $query;
     }
 
+    /** Historical reporting must retain archived academic context. */
+    public function resultsSectionsQuery(): Builder
+    {
+        $query = Section::withTrashed()->where(fn (Builder $section) => $section
+            ->where('sections.is_active', true)
+            ->orWhereHas('responses', fn (Builder $response) => $response->where('review_window_id', $this->id)));
+        $sections = $this->sections()->withTrashed();
+        if ($sections->exists()) {
+            $query->whereIn('sections.id', $sections->select('sections.id')->getQuery());
+        }
+        if ($this->term) {
+            $query->where('sections.term', $this->term);
+        }
+        if ($this->department_id) {
+            $query->whereHas('course', fn (Builder $course) => $course->withTrashed()->where('department_id', $this->department_id));
+        }
+
+        return $query;
+    }
+
     /**
      * Snapshots the eligible student roster at cycle opening.
      */

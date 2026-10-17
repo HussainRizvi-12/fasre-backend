@@ -23,11 +23,11 @@ class AuditAssignmentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $query = AuditAssignment::with(['auditor', 'auditee', 'section.course.department', 'assignedByUser', 'formVersion']);
+        $query = AuditAssignment::with(['auditor', 'auditee', 'historicalSection.historicalCourse.department', 'assignedByUser', 'formVersion']);
 
         // Departmental scope: delegated administrators can only view their department's assignments
         if ($user->isAdmin() && ! $user->isCentralQa()) {
-            $query->whereHas('section.course', fn ($q) => $q->where('department_id', $user->department_id));
+            $query->whereHas('historicalSection.historicalCourse', fn ($q) => $q->where('department_id', $user->department_id));
         }
 
         if ($request->has('status')) {
@@ -124,20 +124,20 @@ class AuditAssignmentController extends Controller
         );
 
         return response()->json([
-            'data' => $this->transform($assignment->load(['auditor', 'auditee', 'section.course', 'formVersion'])),
+            'data' => $this->transform($assignment->load(['auditor', 'auditee', 'historicalSection.historicalCourse', 'formVersion'])),
             'message' => 'Audit assignment created successfully.',
         ], 201);
     }
 
     public function show(Request $request, int $id): JsonResponse
     {
-        $assignment = AuditAssignment::with(['auditor', 'auditee', 'section.course', 'assignedByUser', 'formVersion'])->find($id);
+        $assignment = AuditAssignment::with(['auditor', 'auditee', 'historicalSection.historicalCourse', 'assignedByUser', 'formVersion'])->find($id);
 
         if (! $assignment) {
             return response()->json(['message' => 'Audit assignment not found.'], 404);
         }
 
-        if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
+        if (! $request->user()->canAccessDepartment($assignment->historicalSection?->historicalCourse?->department_id)) {
             return response()->json(['message' => 'Forbidden. Access restricted by department scope.'], 403);
         }
 
@@ -160,7 +160,7 @@ class AuditAssignmentController extends Controller
                 abort(404, 'Audit assignment not found.');
             }
 
-            if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
+            if (! $request->user()->canAccessDepartment($assignment->historicalSection?->historicalCourse?->department_id)) {
                 abort(403, 'Forbidden. Access restricted by department scope.');
             }
 
@@ -227,7 +227,7 @@ class AuditAssignmentController extends Controller
         );
 
         return response()->json([
-            'data' => $this->transform($assignment->load(['auditor', 'auditee', 'section.course', 'formVersion'])),
+            'data' => $this->transform($assignment->load(['auditor', 'auditee', 'historicalSection.historicalCourse', 'formVersion'])),
             'message' => 'Audit approved successfully.',
         ]);
     }
@@ -249,7 +249,7 @@ class AuditAssignmentController extends Controller
                 abort(404, 'Audit assignment not found.');
             }
 
-            if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
+            if (! $request->user()->canAccessDepartment($assignment->historicalSection?->historicalCourse?->department_id)) {
                 abort(403, 'Forbidden. Access restricted by department scope.');
             }
 
@@ -305,7 +305,7 @@ class AuditAssignmentController extends Controller
         );
 
         return response()->json([
-            'data' => $this->transform($assignment->load(['auditor', 'auditee', 'section.course', 'formVersion'])),
+            'data' => $this->transform($assignment->load(['auditor', 'auditee', 'historicalSection.historicalCourse', 'formVersion'])),
             'message' => 'Audit rejected and sent back to the auditor.',
         ]);
     }
@@ -321,7 +321,7 @@ class AuditAssignmentController extends Controller
             abort(404, 'Audit assignment not found.');
         }
 
-        if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
+        if (! $request->user()->canAccessDepartment($assignment->historicalSection?->historicalCourse?->department_id)) {
             abort(403, 'Forbidden. Access restricted by department scope.');
         }
 
@@ -368,7 +368,7 @@ class AuditAssignmentController extends Controller
 
         [$assignment, $action] = DB::transaction(function () use ($id, $validated, $request) {
             $assignment = AuditAssignment::whereKey($id)->lockForUpdate()->firstOrFail();
-            if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
+            if (! $request->user()->canAccessDepartment($assignment->historicalSection?->historicalCourse?->department_id)) {
                 abort(403, 'Forbidden. Access restricted by department scope.');
             }
             if (! in_array($assignment->status, [AuditAssignmentStatus::Approved, AuditAssignmentStatus::FacultyResponded, AuditAssignmentStatus::ActionPlanActive], true)) {
@@ -442,7 +442,7 @@ class AuditAssignmentController extends Controller
 
         [$assignment, $action] = DB::transaction(function () use ($id, $actionId, $validated, $request) {
             $assignment = AuditAssignment::whereKey($id)->lockForUpdate()->firstOrFail();
-            if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
+            if (! $request->user()->canAccessDepartment($assignment->historicalSection?->historicalCourse?->department_id)) {
                 abort(403, 'Forbidden. Access restricted by department scope.');
             }
             if ($assignment->status === AuditAssignmentStatus::Closed) {
@@ -499,6 +499,7 @@ class AuditAssignmentController extends Controller
                     'audit_status' => $assignment->status->value,
                 ]
             );
+
             return [$assignment, $action];
         });
 
@@ -532,7 +533,7 @@ class AuditAssignmentController extends Controller
                 abort(404, 'Audit assignment not found.');
             }
 
-            if (! $request->user()->canAccessDepartment($assignment->section?->course?->department_id)) {
+            if (! $request->user()->canAccessDepartment($assignment->historicalSection?->historicalCourse?->department_id)) {
                 abort(403, 'Forbidden. Access restricted by department scope.');
             }
 
@@ -588,7 +589,7 @@ class AuditAssignmentController extends Controller
 
         return response()->json([
             'message' => 'Audit assignment closed successfully.',
-            'data' => $this->transform($closedAssignment->fresh(['auditor', 'auditee', 'section.course', 'formVersion', 'closedByUser'])),
+            'data' => $this->transform($closedAssignment->fresh(['auditor', 'auditee', 'historicalSection.historicalCourse', 'formVersion', 'closedByUser'])),
         ]);
     }
 
@@ -606,16 +607,16 @@ class AuditAssignmentController extends Controller
                 'name' => $a->auditee?->name,
                 'email' => $a->auditee?->email,
             ],
-            'section' => $a->section ? [
-                'id' => $a->section->id,
-                'name' => $a->section->name,
-                'term' => $a->section->term,
+            'section' => $a->historicalSection ? [
+                'id' => $a->historicalSection->id,
+                'name' => $a->historicalSection->name,
+                'term' => $a->historicalSection->term,
             ] : null,
-            'course' => $a->section?->course ? [
-                'id' => $a->section->course->id,
-                'code' => $a->section->course->code,
-                'title' => $a->section->course->title,
-                'department_id' => $a->section->course->department_id,
+            'course' => $a->historicalSection?->historicalCourse ? [
+                'id' => $a->historicalSection->historicalCourse->id,
+                'code' => $a->historicalSection->historicalCourse->code,
+                'title' => $a->historicalSection->historicalCourse->title,
+                'department_id' => $a->historicalSection->historicalCourse->department_id,
             ] : null,
             'form_version' => $a->formVersion ? [
                 'id' => $a->formVersion->id,

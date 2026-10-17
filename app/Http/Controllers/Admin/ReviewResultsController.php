@@ -42,8 +42,8 @@ class ReviewResultsController extends Controller
             if ($window->department_id && $window->department_id !== $userDeptId) {
                 return response()->json(['message' => 'Forbidden. This review window belongs to another department.'], 403);
             }
-            $hasEligibleDeptSection = $window->sections()->whereHas('course', function ($q) use ($userDeptId) {
-                $q->where('department_id', $userDeptId);
+            $hasEligibleDeptSection = $window->sections()->withTrashed()->whereHas('course', function ($q) use ($userDeptId) {
+                $q->withTrashed()->where('department_id', $userDeptId);
             })->exists();
             if (! $hasEligibleDeptSection && $window->department_id !== $userDeptId) {
                 return response()->json(['message' => 'Forbidden. You do not have permission to view results outside your department.'], 403);
@@ -64,9 +64,12 @@ class ReviewResultsController extends Controller
             ]);
         }
 
-        $sectionsQuery = $window->eligibleSectionsQuery()->with(['course.department', 'facultyAssignments.faculty']);
+        $sectionsQuery = $window->resultsSectionsQuery()->with([
+            'course' => fn ($q) => $q->withTrashed()->with('department'),
+            'facultyAssignments.faculty',
+        ]);
         if ($request->user()->department_id) {
-            $sectionsQuery->whereHas('course', fn ($q) => $q->where('department_id', $request->user()->department_id));
+            $sectionsQuery->whereHas('course', fn ($q) => $q->withTrashed()->where('department_id', $request->user()->department_id));
         }
         if ($request->filled('section_id')) {
             $sectionsQuery->where('id', $request->query('section_id'));

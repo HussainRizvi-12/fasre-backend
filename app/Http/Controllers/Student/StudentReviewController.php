@@ -57,7 +57,7 @@ class StudentReviewController extends Controller
             'section.facultyAssignments.faculty',
         ])
             ->where('student_id', $student->id)
-            ->whereHas('section')
+            ->whereHas('section.course')
             ->get();
 
         $data = $enrollments->map(function ($enrollment) use ($activeWindow, $student) {
@@ -372,7 +372,7 @@ class StudentReviewController extends Controller
         }
 
         $enrolledSections = StudentEnrollment::with([
-            'section.course',
+            'section' => fn ($q) => $q->withTrashed()->with(['course' => fn ($q) => $q->withTrashed()]),
             'section.facultyAssignments.faculty',
         ])
             ->where('student_id', $student->id)
@@ -399,7 +399,7 @@ class StudentReviewController extends Controller
 
             $windowSections = [];
             foreach ($enrolledSections as $section) {
-                if (! $section || ! $window->isSectionEligible($section->id)) {
+                if (! $section || ! $window->resultsSectionsQuery()->whereKey($section->id)->exists()) {
                     continue;
                 }
 

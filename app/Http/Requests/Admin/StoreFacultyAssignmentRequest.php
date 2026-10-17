@@ -56,6 +56,12 @@ class StoreFacultyAssignmentRequest extends FormRequest
     {
         $validator->after(function ($validator) {
             if (! $validator->errors()->has('section_id') && ! $validator->errors()->has('faculty_id')) {
+                if (! Section::whereKey($this->section_id)->whereHas('course')->exists()) {
+                    $validator->errors()->add('section_id', 'Select a section from the current course catalog.');
+
+                    return;
+                }
+
                 $exists = FacultyAssignment::where('section_id', $this->section_id)
                     ->where('faculty_id', $this->faculty_id)
                     ->exists();

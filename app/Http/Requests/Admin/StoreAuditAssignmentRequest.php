@@ -7,6 +7,7 @@ use App\Enums\FormType;
 use App\Enums\UserRole;
 use App\Models\AuditAssignment;
 use App\Models\FacultyAssignment;
+use App\Models\Section;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -74,6 +75,12 @@ class StoreAuditAssignmentRequest extends FormRequest
 
             // Academic validation: auditee must actually teach the section
             if ($sectionId !== null) {
+                if (! Section::whereKey($sectionId)->whereHas('course')->exists()) {
+                    $validator->errors()->add('section_id', 'Select a section from the current course catalog. Archived courses and sections cannot receive new audits.');
+
+                    return;
+                }
+
                 $teachesSection = FacultyAssignment::where('section_id', $sectionId)
                     ->where('faculty_id', $auditeeId)
                     ->exists();
